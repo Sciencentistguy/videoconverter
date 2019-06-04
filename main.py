@@ -37,11 +37,12 @@ def clean_name(filename: str):
 
 def main(directory: str):
     check_dir(directory)
-
+    episode = 0
     for filename in os.listdir(directory):
         parsed_info = {"video": {}, "audio": {}, "subtitle": {}}
         if not "." in filename:
             continue
+        episode += 1
         file_info = json.loads(subprocess.check_output(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
         print(file_info)
         streams: list = file_info["streams"]
@@ -79,7 +80,12 @@ def main(directory: str):
         for i in subtitle_mapping:
             map_cmds.extend(["-map", f"0:{i}"])
         print("")
-        outname = clean_name(filename)
+        global TV
+        if TV:
+            global title, season
+            outname = f"{title} - s{season:02}e{episode:02}.mkv"
+        else:
+            outname = clean_name(filename)
         encode(filename, f"newfiles/{outname}", video_codec=video_codec, audio_codec=audio_codec, subtitle_codec=subtitle_codec, others=map_cmds)
 
 
@@ -87,4 +93,7 @@ if "pycharm" in sys.argv:
     main("/home/jamie/Videos/Its Always Sunny in Philadelphia Season 1, 2, 3, 4, 5 & 6 + Extras DVDRip TSV/Season 01")
 
 if __name__ == "__main__":
+    TV = "n" not in input("TV show mode? (Y/n) ")
+    title = input("Please enter the title of the TV Show: ")
+    season = int(input("Which season is this? "))
     main(".")
