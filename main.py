@@ -2,8 +2,6 @@
 import subprocess
 import json
 import os
-import sys
-from typing import List, Any
 
 
 def encode(filename, outname, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None):
