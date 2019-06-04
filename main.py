@@ -52,8 +52,8 @@ def main(directory: str):
         # video starts
         if len(parsed_info["video"]) > 1:
             raise KeyError("The file provided has more than one video stream")
-        video_codec = "copy" if ("h264" in parsed_info["video"][0]["codec_name"]) else "libx264"
-        video_mapping = [0]
+        video_codec = "copy" if ("h264" in list(parsed_info["video"].values())[0]["codec_name"]) else "libx264"
+        video_mapping = [list(parsed_info["video"].keys())[0]]
         # video ends
 
         # audio starts
