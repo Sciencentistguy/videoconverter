@@ -3,6 +3,7 @@ import subprocess
 import json
 import os
 import sys
+from typing import List, Any
 
 
 def encode(filename, outname, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None):
@@ -22,13 +23,6 @@ def check_dir(directory):
         os.mkdir("newfiles")
 
 
-def parse_streams(streams: list):
-    out = []
-    for stream in streams:
-        ls = []
-        stream: dict = stream
-
-
 def clean_name(filename: str):
     if filename.endswith(".mkv"):
         return filename
@@ -37,12 +31,14 @@ def clean_name(filename: str):
 
 def main(directory: str):
     check_dir(directory)
-    episode = 0
+    global episode
+    global TV
     for filename in os.listdir(directory):
         parsed_info = {"video": {}, "audio": {}, "subtitle": {}}
         if not "." in filename:
             continue
-        episode += 1
+        if TV:
+            episode += 1
         file_info = json.loads(subprocess.check_output(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
         print(file_info)
         streams: list = file_info["streams"]
@@ -55,45 +51,96 @@ def main(directory: str):
             if "subtitle" in stream["codec_type"]:
                 parsed_info["subtitle"][stream["index"]] = stream
 
+        # video starts
         if len(parsed_info["video"]) > 1:
             raise KeyError("The file provided has more than one video stream")
-        video_codec = "copy" if ("libx264" in parsed_info["video"][0]["codec_name"]) else "libx264"
+        video_codec = "copy" if ("h264" in parsed_info["video"][0]["codec_name"]) else "libx264"
         video_mapping = [0]
+        # video ends
+
+        # audio starts
+        audio_mapping = []
+        try:
+            if len(parsed_info["audio"]) <= 1:
+                audio_mapping = list(parsed_info["audio"].keys())
+            else:  # check for eng
+                for k, i in parsed_info["audio"].items():
+                    for v in i["tags"].values():
+                        if "eng" in str(v):
+                            audio_mapping.append(int(k))
+                            break
+        except KeyError:
+            audio_mapping = list(parsed_info["audio"].keys())
+
+        audio_mapping = list(set(audio_mapping))
+        audio_mapping.sort()
+
+        audio_codecs = {}
+        for k, v in parsed_info["audio"].items():
+            try:
+                if ("dts" in v["profile"].lower()) or ("ma" in v["profile"].lower()) or ("truehd" in v["profile"].lower()):
+                    audio_codecs[k] = "flac"
+                    continue
+            except KeyError:
+                pass
+            if "aac" in v["codec_name"]:
+                audio_codecs[k] = "copy"
+            else:
+                audio_codecs[k] = "libfdk_aac"
+        # audio ends
+
+        # subtitle starts
+        if len(parsed_info["subtitle"]) <= 1:
+            subtitle_mapping = list(parsed_info["subtitle"].keys())
+
+        subtitle_mapping = []
+        if len(parsed_info["subtitle"]) <= 1:
+            subtitle_mapping = list(parsed_info["subtitle"].keys())
+        else:  # check for eng
+            for k, i in parsed_info["subtitle"].items():
+                for v in i["tags"].values():
+                    if "eng" in str(v):
+                        subtitle_mapping.append(int(k))
+                        break
+        subtitle_mapping = list(set(subtitle_mapping))
+        subtitle_mapping.sort()
+
+        subtitle_codecs = {}
+        for k, v in parsed_info["subtitle"].items():
+            if ("pgs" in v["codec_name"]) or ("dvd" in v["codec_name"]):
+                subtitle_codecs[k] = "copy"
+            else:
+                subtitle_codecs[k] = "ass"
+        # subtitle ends
+
+        codec_cmds = []
+        for c, i in enumerate(audio_mapping):
+            codec_cmds.extend([f"-c:a:{c}", audio_codecs[i]])
+        for c, i in enumerate(subtitle_mapping):
+            codec_cmds.extend([f"-c:s:{c}", subtitle_codecs[i]])
+
         map_cmds = []
-
-        # if len(parsed_info["audio"]) <= 1:
-        audio_mapping = list(parsed_info["audio"].keys())
-        for i in parsed_info["audio"].values():
-            if "aac" not in i["codec_name"]:
-                audio_codec = "libfdk_aac"
-                break
-            audio_codec = "copy"
-
-        # if len(parsed_info["subtitle"]) <= 1:
-        subtitle_mapping = list(parsed_info["subtitle"].keys())
-        subtitle_codec = "copy"
-
         for i in video_mapping:
             map_cmds.extend(["-map", f"0:{i}"])
         for i in audio_mapping:
             map_cmds.extend(["-map", f"0:{i}"])
         for i in subtitle_mapping:
             map_cmds.extend(["-map", f"0:{i}"])
-        print("")
-        global TV
+
         if TV:
             global title, season
             outname = f"{title} - s{season:02}e{episode:02}.mkv"
         else:
             outname = clean_name(filename)
-        encode(filename, f"newfiles/{outname}", video_codec=video_codec, audio_codec=audio_codec, subtitle_codec=subtitle_codec, others=map_cmds)
 
+        additional_cmds = codec_cmds + map_cmds
+        encode(filename, f"newfiles/{outname}", video_codec=video_codec, others=additional_cmds)
 
-if "pycharm" in sys.argv:
-    main("/home/jamie/Videos/Its Always Sunny in Philadelphia Season 1, 2, 3, 4, 5 & 6 + Extras DVDRip TSV/Season 01")
 
 if __name__ == "__main__":
     TV = "n" not in input("TV show mode? (Y/n) ")
     title = input("Please enter the title of the TV Show: ")
     season = int(input("Which season is this? "))
+    episode = input("What is the first episode in this disc? (defaults to 1) ")
+    episode = int(episode) - 1 if episode != "" else 0
     main(".")
