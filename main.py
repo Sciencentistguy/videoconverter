@@ -151,8 +151,9 @@ def main(directory: str):
 
 if __name__ == "__main__":
     TV = "n" not in input("TV show mode? (Y/n) ")
-    title = input("Please enter the title of the TV Show: ")
-    season = int(input("Which season is this? "))
-    episode = input("What is the first episode in this disc? (defaults to 1) ")
-    episode = int(episode) - 1 if episode != "" else 0
+    if TV:
+        title = input("Please enter the title of the TV Show: ")
+        season = int(input("Which season is this? "))
+        episode = input("What is the first episode in this disc? (defaults to 1) ")
+        episode = int(episode) - 1 if episode != "" else 0
     main(".")
