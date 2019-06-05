@@ -1,4 +1,5 @@
 #!/bin/python
+import copy
 import subprocess
 import json
 import os
@@ -16,9 +17,12 @@ def encode(filename, outname, video_codec="copy", crf=20, audio_codec="copy", su
 
 
 def check_dir(directory):
+    global season, TV
+    outdir = f"Season {season:02}" if TV else "newfiles"
     os.chdir(directory)
-    if not os.path.isdir("newfiles"):
-        os.mkdir("newfiles")
+    if not os.path.isdir(outdir):
+        os.mkdir(outdir)
+    return outdir
 
 
 def clean_name(filename: str):
@@ -28,7 +32,7 @@ def clean_name(filename: str):
 
 
 def main(directory: str):
-    check_dir(directory)
+    outdir = check_dir(directory)
     global episode
     global TV
     for filename in os.listdir(directory):
@@ -49,10 +53,20 @@ def main(directory: str):
             if "subtitle" in stream["codec_type"]:
                 parsed_info["subtitle"][stream["index"]] = stream
 
+        pi = copy.deepcopy(parsed_info)
+        for k, v in pi["video"].items():
+            if "mjpeg" in v["codec_name"]:
+                parsed_info["video"].pop(k)
+        del pi
+
         # video starts
         if len(parsed_info["video"]) > 1:
             raise KeyError("The file provided has more than one video stream")
-        video_codec = "copy" if ("h264" in list(parsed_info["video"].values())[0]["codec_name"]) else "libx264"
+        video_codec = "libx264"
+        if "h264" in list(parsed_info["video"].values())[0]["codec_name"]:
+            video_codec = "copy"
+        elif "hevc" in list(parsed_info["video"].values())[0]["codec_name"]:
+            video_codec = "copy"
         video_mapping = [list(parsed_info["video"].keys())[0]]
         # video ends
 
@@ -132,7 +146,7 @@ def main(directory: str):
             outname = clean_name(filename)
 
         additional_cmds = codec_cmds + map_cmds
-        encode(filename, f"newfiles/{outname}", video_codec=video_codec, others=additional_cmds)
+        encode(filename, f"{outdir}/{outname}", video_codec=video_codec, others=additional_cmds)
 
 
 if __name__ == "__main__":
