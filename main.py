@@ -3,7 +3,14 @@ import copy
 import subprocess
 import json
 import os
+import sys
 
+def log(i: str):
+    if "-v" in sys.argv:
+        with open("./videoconverter.log","a") as f:
+            f.write(i)
+            f.write("\n")
+    print(i)
 
 def encode(filename, outname, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None):
     if others is None:
@@ -35,7 +42,11 @@ def main(directory: str):
     outdir = check_dir(directory)
     global episode
     global TV
-    for filename in os.listdir(directory):
+    filelist: list = os.listdir(directory)
+    print(filelist)
+    filelist.sort()
+    print(filelist)
+    for filename in filelist:
         parsed_info = {"video": {}, "audio": {}, "subtitle": {}}
         if not "." in filename:
             continue
@@ -90,7 +101,7 @@ def main(directory: str):
         audio_codecs = {}
         for k, v in parsed_info["audio"].items():
             try:
-                if ("dts" in v["profile"].lower()) or ("ma" in v["profile"].lower()) or ("truehd" in v["profile"].lower()):
+                if (("dts" in v["profile"].lower()) and ("ma" in v["profile"].lower())) or ("truehd" in v["profile"].lower()):
                     audio_codecs[k] = "flac"
                     continue
             except KeyError:
@@ -145,6 +156,7 @@ def main(directory: str):
         else:
             outname = clean_name(filename)
 
+        log(f"{filename} -> {outname}")
         additional_cmds = codec_cmds + map_cmds
         encode(filename, f"{outdir}/{outname}", video_codec=video_codec, others=additional_cmds)
 
