@@ -5,12 +5,14 @@ import json
 import os
 import sys
 
+
 def log(i: str):
     if "-v" in sys.argv:
-        with open("./videoconverter.log","a") as f:
+        with open("./videoconverter.log", "a") as f:
             f.write(i)
             f.write("\n")
     print(i)
+
 
 def encode(filename, outname, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None):
     if others is None:
@@ -162,7 +164,7 @@ def main(directory: str):
 
 
 if __name__ == "__main__":
-    TV = "n" not in input("TV show mode? (Y/n) ")
+    TV = "n" not in input("TV show mode? (Y/n) ").lower()
     if TV:
         title = input("Please enter the title of the TV Show: ")
         season = int(input("Which season is this? "))
