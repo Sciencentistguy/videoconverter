@@ -1,4 +1,5 @@
 #!/bin/python
+import argparse
 import copy
 import subprocess
 import json
@@ -38,6 +39,18 @@ def clean_name(filename: str):
     if filename.endswith(".mkv"):
         return filename
     return filename[:filename.rfind(".")] + ".mkv"
+
+
+def remux_subtitles(directory: str):
+    os.chdir(directory)
+    if not os.path.isdir("newfiles"):
+        os.mkdir("newfiles")
+    filelist: list = os.listdir(directory)
+    for filename in copy.deepcopy(filelist):
+        if filename.endswith("srt"):
+            filelist.remove(filename)
+    for filename in filelist:
+        subprocess.call(["ffmpeg", "-i", filename, "-i", filename[:-4] + ".srt", "-c:v", "copy", "-c:a", "copy", "-c:s", "copy", "-map", "0", "-map", "1", f"newfiles/{filename[:-4]+'.mkv'}"])
 
 
 def main(directory: str):
@@ -164,10 +177,14 @@ def main(directory: str):
 
 
 if __name__ == "__main__":
-    TV = "n" not in input("TV show mode? (Y/n) ").lower()
-    if TV:
-        title = input("Please enter the title of the TV Show: ")
-        season = int(input("Which season is this? "))
-        episode = input("What is the first episode in this disc? (defaults to 1) ")
-        episode = int(episode) - 1 if episode != "" else 0
-    main(".")
+    if "--subs" in sys.argv:
+        remux_subtitles(".")
+        exit()
+    else:
+        TV = "n" not in input("TV show mode? (Y/n) ").lower()
+        if TV:
+            title = input("Please enter the title of the TV Show: ")
+            season = int(input("Which season is this? "))
+            episode = input("What is the first episode in this disc? (defaults to 1) ")
+            episode = int(episode) - 1 if episode != "" else 0
+        main(".")
