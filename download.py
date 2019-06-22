@@ -15,4 +15,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("target", help="The file to download", type=str)
     args = parser.parse_args()
-    main(args.magnet)
+    main(args.target)
