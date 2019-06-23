@@ -65,6 +65,8 @@ def main(directory: str):
         parsed_info = {"video": {}, "audio": {}, "subtitle": {}}
         if not "." in filename:
             continue
+        if ".txt" in filename or ".nfo" in filename:
+            continue
         if TV:
             episode += 1
         file_info = json.loads(subprocess.check_output(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
