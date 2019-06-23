@@ -172,6 +172,9 @@ def main(directory: str):
             outname = clean_name(filename)
 
         log(f"{filename} -> {outname}")
+        global endStr
+        endStr += (f"{filename} -> {outname}\n")
+
         additional_cmds = codec_cmds + map_cmds
         encode(filename, f"{outdir}/{outname}", video_codec=video_codec, others=additional_cmds)
 
@@ -187,4 +190,6 @@ if __name__ == "__main__":
             season = int(input("Which season is this? "))
             episode = input("What is the first episode in this disc? (defaults to 1) ")
             episode = int(episode) - 1 if episode != "" else 0
+        endStr="\n"
         main(".")
+        print(endStr)
