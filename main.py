@@ -81,7 +81,7 @@ def main(directory: str):
 
         pi = copy.deepcopy(parsed_info)
         for k, v in pi["video"].items():
-            if "mjpeg" in v["codec_name"]:
+            if "mjpeg" in v["codec_name"] or "png" in v["codec_name"]:
                 parsed_info["video"].pop(k)
         del pi
 
