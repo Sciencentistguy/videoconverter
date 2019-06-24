@@ -21,6 +21,8 @@ def encode(filename, outname, video_codec="copy", crf=20, audio_codec="copy", su
     command = ["ffmpeg", "-threads", "0", "-i", filename, "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec]
     if video_codec != "copy":
         command.extend(["-crf", str(crf)])
+    if audio_codec == "libfdk_aac":
+        command.extend(["-cutoff", 18000])
     command.extend(others)
     command.append(outname)
     subprocess.run(command)
@@ -67,7 +69,7 @@ def main(directory: str):
             continue
         if ".txt" in filename or ".nfo" in filename:
             continue
-        if os.path.isdir("./"+filename):
+        if os.path.isdir("./" + filename):
             continue
         if TV:
             episode += 1
@@ -83,11 +85,9 @@ def main(directory: str):
             if "subtitle" in stream["codec_type"]:
                 parsed_info["subtitle"][stream["index"]] = stream
 
-        pi = copy.deepcopy(parsed_info)
-        for k, v in pi["video"].items():
+        for k, v in copy.deepcopy(parsed_info)["video"].items():
             if "mjpeg" in v["codec_name"] or "png" in v["codec_name"]:
                 parsed_info["video"].pop(k)
-        del pi
 
         # video starts
         if len(parsed_info["video"]) > 1:
@@ -194,6 +194,6 @@ if __name__ == "__main__":
             season = int(input("Which season is this? "))
             episode = input("What is the first episode in this disc? (defaults to 1) ")
             episode = int(episode) - 1 if episode != "" else 0
-        endStr="\n"
+        endStr = "\n"
         main(".")
         print(endStr)
