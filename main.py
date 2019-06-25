@@ -190,6 +190,8 @@ def main(directory: str):
         crf = 20
         if "-crf" in sys.argv:
             crf = int(sys.argv[sys.argv.index("-crf") + 1])
+        if "--noupscale" in sys.argv:
+            upscale = False
         encode(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=upscale)
 
 
