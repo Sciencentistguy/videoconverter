@@ -15,10 +15,13 @@ def log(i: str):
     print(i)
 
 
-def encode(filename, outname, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None):
+def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=False):
     if others is None:
         others = []
     command = ["ffmpeg", "-threads", "0", "-i", filename, "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec]
+    if upscale:
+        command.extend(["-vf", f"scale=-1:720"])
+        video_codec = "libx264"
     if video_codec != "copy":
         command.extend(["-crf", str(crf)])
     if audio_codec == "libfdk_aac":
@@ -52,7 +55,7 @@ def remux_subtitles(directory: str):
         if filename.endswith("srt"):
             filelist.remove(filename)
     for filename in filelist:
-        subprocess.call(["ffmpeg", "-i", filename, "-i", filename[:-4] + ".srt", "-c:v", "copy", "-c:a", "copy", "-c:s", "copy", "-map", "0", "-map", "1", f"newfiles/{filename[:-4]+'.mkv'}"])
+        subprocess.call(["ffmpeg", "-i", filename, "-i", filename[:-4] + ".srt", "-c:v", "copy", "-c:a", "copy", "-c:s", "copy", "-map", "0", "-map", "1", f"newfiles/{filename[:-4] + '.mkv'}"])
 
 
 def main(directory: str):
@@ -97,6 +100,9 @@ def main(directory: str):
             video_codec = "copy"
         elif "hevc" in list(parsed_info["video"].values())[0]["codec_name"]:
             video_codec = "copy"
+        upscale: bool = False
+        if parsed_info["video"][0]["height"] < 720:
+            upscale = True
         video_mapping = [list(parsed_info["video"].keys())[0]]
         # video ends
 
@@ -180,7 +186,11 @@ def main(directory: str):
         endStr += (f"{filename} -> {outname}\n")
 
         additional_cmds = codec_cmds + map_cmds
-        encode(filename, f"{outdir}/{outname}", video_codec=video_codec, others=additional_cmds)
+        newheight: int = int(parsed_info["video"][0]["width"] * (720 / parsed_info["video"][0]["height"]))
+        crf = 20
+        if "-crf" in sys.argv:
+            crf = int(sys.argv[sys.argv.index("-crf") + 1])
+        encode(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=upscale)
 
 
 if __name__ == "__main__":
