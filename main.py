@@ -186,7 +186,6 @@ def main(directory: str):
         endStr += (f"{filename} -> {outname}\n")
 
         additional_cmds = codec_cmds + map_cmds
-        newheight: int = int(parsed_info["video"][0]["width"] * (720 / parsed_info["video"][0]["height"]))
         crf = 20
         if "-crf" in sys.argv:
             crf = int(sys.argv[sys.argv.index("-crf") + 1])
