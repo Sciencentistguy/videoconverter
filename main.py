@@ -127,7 +127,10 @@ def main(directory: str):
         audio_codecs = {}
         for k, v in parsed_info["audio"].items():
             try:
-                if (("dts" in v["profile"].lower()) and ("ma" in v["profile"].lower())) or ("truehd" in v["profile"].lower()):
+                if "truehd" in v["codec_name"].lower():
+                    audio_codecs[k] = "flac"
+                    continue
+                if ("dts" in v["profile"].lower()) and ("ma" in v["profile"].lower()):
                     audio_codecs[k] = "flac"
                     continue
             except KeyError:
@@ -184,7 +187,7 @@ def main(directory: str):
 
         log(f"{filename} -> {outname}")
         global endStr
-        endStr += (f"{filename} -> {outname}\n")
+        endStr += f"{filename} -> {outname}\n"
 
         additional_cmds = codec_cmds + map_cmds
         crf = 20
