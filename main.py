@@ -15,12 +15,12 @@ def log(i: str):
     print(i)
 
 
-def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=False):
+def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=(False, 0)):
     if others is None:
         others = []
     command = ["ffmpeg", "-threads", "0", "-i", filename, "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec]
-    if upscale:
-        command.extend(["-vf", f"scale=-1:720"])
+    if upscale[0]:
+        command.extend(["-vf", f"scale={upscale[1]}:720"])
         video_codec = "libx264"
     if video_codec != "copy":
         command.extend(["-crf", str(crf)])
@@ -28,6 +28,7 @@ def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec=
         command.extend(["-cutoff", 18000])
     command.extend(others)
     command.append(outname)
+    print(*command)
     subprocess.run(command)
 
 
@@ -191,7 +192,10 @@ def main(directory: str):
             crf = int(sys.argv[sys.argv.index("-crf") + 1])
         if "--noupscale" in sys.argv:
             upscale = False
-        encode(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=upscale)
+        width = int(parsed_info["video"][0]["width"] * (720 / parsed_info["video"][0]["height"]))
+        if not width % 2 == 0:
+            width += 1
+        encode(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width))
 
 
 if __name__ == "__main__":
