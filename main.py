@@ -65,7 +65,7 @@ def main(directory: str):
     global TV
     filelist: list = os.listdir(directory)
     print(filelist)
-    filelist.sort()
+    filelist.sort(key=lambda s: s.casefold())
     print(filelist)
     for filename in filelist:
         parsed_info = {"video": {}, "audio": {}, "subtitle": {}}
@@ -96,13 +96,15 @@ def main(directory: str):
         # video starts
         if len(parsed_info["video"]) > 1:
             raise KeyError("The file provided has more than one video stream")
+        video_stream = list(parsed_info["video"].keys())[0]
         video_codec = "libx264"
         if "h264" in list(parsed_info["video"].values())[0]["codec_name"]:
             video_codec = "copy"
         elif "hevc" in list(parsed_info["video"].values())[0]["codec_name"]:
             video_codec = "copy"
         upscale: bool = False
-        if parsed_info["video"][0]["height"] < 720:
+        if not parsed_info["video"][video_stream]["height"] >= 700:
+            print(f"\n\n{parsed_info['video'][video_stream]['height']}\n\n")
             upscale = True
         video_mapping = [list(parsed_info["video"].keys())[0]]
         # video ends
@@ -195,7 +197,11 @@ def main(directory: str):
             crf = int(sys.argv[sys.argv.index("-crf") + 1])
         if "--noupscale" in sys.argv:
             upscale = False
-        width = int(parsed_info["video"][0]["width"] * (720 / parsed_info["video"][0]["height"]))
+
+        if upscale:
+            width = int(parsed_info["video"][video_stream]["width"] * (720 / parsed_info["video"][video_stream]["height"]))
+        else:
+            width = 0
         if not width % 2 == 0:
             width += 1
         encode(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width))
