@@ -26,6 +26,7 @@ def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec=
         command.extend(["-crf", str(crf)])
     if audio_codec == "libfdk_aac":
         command.extend(["-cutoff", 18000])
+    command[6] = video_codec
     command.extend(others)
     command.append(outname)
     print(*command)
