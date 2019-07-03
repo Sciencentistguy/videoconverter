@@ -145,18 +145,21 @@ def main(directory: str):
         # audio ends
 
         # subtitle starts
-        if len(parsed_info["subtitle"]) <= 1:
-            subtitle_mapping = list(parsed_info["subtitle"].keys())
-
         subtitle_mapping = []
         if len(parsed_info["subtitle"]) <= 1:
             subtitle_mapping = list(parsed_info["subtitle"].keys())
-        else:  # check for eng
+        else:  # check for eng. if there are no eng streams, and one or more streams have no metadata, add all
             for k, i in parsed_info["subtitle"].items():
-                for v in i["tags"].values():
-                    if "eng" in str(v):
-                        subtitle_mapping.append(int(k))
-                        break
+                try:
+                    for v in i["tags"].values():
+                        if "eng" in str(v):
+                            subtitle_mapping.append(int(k))
+                            break
+                except KeyError:
+                    continue
+            if len(subtitle_mapping)==0:
+                subtitle_mapping = list(parsed_info["subtitle"].keys())
+
         subtitle_mapping = list(set(subtitle_mapping))
         subtitle_mapping.sort()
 
