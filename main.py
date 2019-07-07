@@ -197,7 +197,7 @@ def main(directory: str):
 
         additional_cmds = codec_cmds + map_cmds
         crf = 20
-        if "-crf" in sys.argv:
+        if "--crf" in sys.argv:
             crf = int(sys.argv[sys.argv.index("-crf") + 1])
         if "--noupscale" in sys.argv:
             upscale = False
