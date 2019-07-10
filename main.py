@@ -26,6 +26,8 @@ def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec=
         command.extend(["-crf", str(crf)])
     if audio_codec == "libfdk_aac":
         command.extend(["-cutoff", 18000])
+    if "--tune" in sys.argv:
+        command.extend(["-tune", sys.argv[sys.argv.index("--tune") + 1]])
     command[6] = video_codec
     command.extend(others)
     command.append(outname)
@@ -105,8 +107,8 @@ def main(directory: str):
             video_codec = "copy"
         upscale: bool = False
         if not parsed_info["video"][video_stream]["height"] >= 700:
-            print(f"\n\n{parsed_info['video'][video_stream]['height']}\n\n")
-            upscale = True
+            if "--upscale" in sys.argv:
+                upscale = True
         video_mapping = [list(parsed_info["video"].keys())[0]]
         # video ends
 
@@ -157,7 +159,7 @@ def main(directory: str):
                             break
                 except KeyError:
                     continue
-            if len(subtitle_mapping)==0:
+            if len(subtitle_mapping) == 0:
                 subtitle_mapping = list(parsed_info["subtitle"].keys())
 
         subtitle_mapping = list(set(subtitle_mapping))
@@ -198,10 +200,7 @@ def main(directory: str):
         additional_cmds = codec_cmds + map_cmds
         crf = 20
         if "--crf" in sys.argv:
-            crf = int(sys.argv[sys.argv.index("-crf") + 1])
-        if "--noupscale" in sys.argv:
-            upscale = False
-
+            crf = int(sys.argv[sys.argv.index("--crf") + 1])
         if upscale:
             width = int(parsed_info["video"][video_stream]["width"] * (720 / parsed_info["video"][video_stream]["height"]))
         else:
