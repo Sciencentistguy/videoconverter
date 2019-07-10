@@ -15,7 +15,7 @@ def log(i: str):
     print(i)
 
 
-def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=(False, 0)):
+def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=(False, 0), tune=False, deinterlace=False):
     if others is None:
         others = []
     command = ["ffmpeg", "-threads", "0", "-i", filename, "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec]
@@ -26,8 +26,10 @@ def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec=
         command.extend(["-crf", str(crf)])
     if audio_codec == "libfdk_aac":
         command.extend(["-cutoff", 18000])
-    if "--tune" in sys.argv:
+    if tune:
         command.extend(["-tune", sys.argv[sys.argv.index("--tune") + 1]])
+    if deinterlace:
+        command.extend(["-filter:v", "yadif"])
     command[6] = video_codec
     command.extend(others)
     command.append(outname)
@@ -207,7 +209,7 @@ def main(directory: str):
             width = 0
         if not width % 2 == 0:
             width += 1
-        encode(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width))
+        encode(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=("--deinterlace" in sys.argv))
 
 
 if __name__ == "__main__":
