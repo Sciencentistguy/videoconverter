@@ -18,6 +18,7 @@ def log(i: str):
 def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=(False, 0), tune=False, deinterlace=False):
     if others is None:
         others = []
+    print(filename)
     command = ["ffmpeg", "-threads", "0", "-hwaccel", "auto", "-i", filename, "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec]
     if upscale[0]:
         command.extend(["-vf", f"scale={upscale[1]}:720"])
@@ -30,7 +31,7 @@ def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec=
         command.extend(["-tune", sys.argv[sys.argv.index("--tune") + 1]])
     if deinterlace:
         command.extend(["-filter:v", "yadif"])
-    command[6] = video_codec
+    command[8] = video_codec
     command.extend(others)
     command.append(outname)
     print(*command)
