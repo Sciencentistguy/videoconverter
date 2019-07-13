@@ -32,6 +32,8 @@ def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec=
     if deinterlace:
         command.extend(["-filter:v", "yadif"])
     command[8] = video_codec
+    if video_codec == "libx264":
+        command.extend(["-profile:v", "high", "-rc-lookahead", "60", "-preset", "slow"])
     command.extend(others)
     command.append(outname)
     print(*command)
