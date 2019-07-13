@@ -1,5 +1,4 @@
 #!/bin/python
-import argparse
 import copy
 import subprocess
 import json
@@ -8,18 +7,20 @@ import sys
 
 
 def log(i: str):
-    if "-v" in sys.argv:
+    if "-V" in sys.argv:
         with open("./videoconverter.log", "a") as f:
             f.write(i)
             f.write("\n")
-    print(i)
+        print(i)
+    if "-v" in sys.argv:
+        print(i)
 
 
-def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=(False, 0), tune=False, deinterlace=False):
+def encode_cpu(filename: str, outname: str, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=(False, 0), tune=False, deinterlace=False):
     if others is None:
         others = []
-    print(filename)
-    command = ["ffmpeg", "-threads", "0", "-hwaccel", "auto", "-i", filename, "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec]
+    log(filename)
+    command = ["ffmpeg", "-hide_banner", "-threads", "0", "-hwaccel", "auto", "-i", filename, "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec]
     if upscale[0]:
         command.extend(["-vf", f"scale={upscale[1]}:720"])
         video_codec = "libx264"
@@ -31,12 +32,36 @@ def encode(filename: str, outname: str, video_codec="copy", crf=20, audio_codec=
         command.extend(["-tune", sys.argv[sys.argv.index("--tune") + 1]])
     if deinterlace:
         command.extend(["-filter:v", "yadif"])
-    command[8] = video_codec
+    command[9] = video_codec
     if video_codec == "libx264":
         command.extend(["-profile:v", "high", "-rc-lookahead", "60", "-preset", "slow"])
     command.extend(others)
     command.append(outname)
-    print(*command)
+    print("\n", *command, "\n")
+    subprocess.run(command)
+
+
+def encode_gpu(filename: str, outname: str, video_codec: str, crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=(False, 0), tune=False, deinterlace=False):
+    if video_codec == "copy":
+        encode_cpu(filename, outname, video_codec, crf, audio_codec, subtitle_codec, others, upscale, tune, deinterlace)
+        return
+    if others is None:
+        others = []
+    log(filename)
+    command = ["ffmpeg", "-hide_banner", "-threads", "0", "-hwaccel", "auto", "-i", filename, "-c:v", "hevc_nvenc", "-c:a", audio_codec, "-c:s", subtitle_codec]
+    filters = ["-filter:v", "hwupload_cuda,"]
+    if deinterlace:
+        filters[1] += "yadif_cuda,"
+    if upscale[0]:
+        filters[1] += f"scale_npp=w={upscale[1]}:h=720:interp_algo=lanczos,"
+    if audio_codec == "libfdk_aac":
+        command.extend(["-cutoff", 18000])
+    command.extend(["-rc", "constqp", "-qp", str(crf), "-preset", "slow", "-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"])
+    filters[1] = filters[1][:-1]
+    command.extend(filters)
+    command.extend(others)
+    command.append(outname)
+    print("\n", *command, "\n")
     subprocess.run(command)
 
 
@@ -72,9 +97,9 @@ def main(directory: str):
     global episode
     global TV
     filelist: list = os.listdir(directory)
-    print(filelist)
+    log(filelist)
     filelist.sort(key=lambda s: s.casefold())
-    print(filelist)
+    log(filelist)
     for filename in filelist:
         parsed_info = {"video": {}, "audio": {}, "subtitle": {}}
         if not "." in filename:
@@ -86,7 +111,7 @@ def main(directory: str):
         if TV:
             episode += 1
         file_info = json.loads(subprocess.check_output(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
-        print(file_info)
+        log(file_info)
         streams: list = file_info["streams"]
 
         for stream in streams:
@@ -212,7 +237,10 @@ def main(directory: str):
             width = 0
         if not width % 2 == 0:
             width += 1
-        encode(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=("--deinterlace" in sys.argv))
+        if "--gpu" in sys.argv:
+            encode_gpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=("--deinterlace" in sys.argv))
+        else:
+            encode_cpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=("--deinterlace" in sys.argv))
 
 
 if __name__ == "__main__":
