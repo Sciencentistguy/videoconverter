@@ -174,7 +174,7 @@ def main(directory: str):
                     continue
             except KeyError:
                 pass
-            if "aac" in v["codec_name"]:
+            if "aac" in v["codec_name"] or "flac" in v["codec_name"]:
                 audio_codecs[k] = "copy"
             else:
                 audio_codecs[k] = "libfdk_aac"
