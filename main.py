@@ -21,6 +21,8 @@ def encode_cpu(filename: str, outname: str, video_codec="copy", crf=20, audio_co
         others = []
     log(filename)
     command = ["ffmpeg", "-hide_banner", "-threads", "0", "-hwaccel", "auto", "-i", filename, "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec]
+    if "--force-reencode" in sys.argv:
+        video_codec="libx264"
     if upscale[0]:
         command.extend(["-vf", f"scale={upscale[1]}:720"])
         video_codec = "libx264"
@@ -42,6 +44,8 @@ def encode_cpu(filename: str, outname: str, video_codec="copy", crf=20, audio_co
 
 
 def encode_gpu(filename: str, outname: str, video_codec: str, crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=(False, 0), tune=False, deinterlace=False):
+    if "--force-reencode" in sys.argv:
+        video_codec="hevc_nvenc"
     if video_codec == "copy":
         encode_cpu(filename, outname, video_codec, crf, audio_codec, subtitle_codec, others, upscale, tune, deinterlace)
         return
