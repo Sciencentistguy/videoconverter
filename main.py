@@ -39,7 +39,8 @@ def encode_cpu(filename: str, outname: str, video_codec="copy", crf=20, audio_co
         command.extend(["-profile:v", "high", "-rc-lookahead", "60", "-preset", "slow"])
     command.extend(others)
     command.append(outname)
-    print("\n", *command, "\n")
+    print("\n")
+    print(*command, "\n")
     subprocess.run(command)
 
 
@@ -246,18 +247,22 @@ def main(directory: str):
         else:
             encode_cpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=("--deinterlace" in sys.argv))
 
+try:
 
-if __name__ == "__main__":
-    if "--subs" in sys.argv:
-        remux_subtitles(".")
-        exit()
-    else:
-        TV = "n" not in input("TV show mode? (Y/n) ").lower()
-        if TV:
-            title = input("Please enter the title of the TV Show: ")
-            season = int(input("Which season is this? "))
-            episode = input("What is the first episode in this disc? (defaults to 1) ")
-            episode = int(episode) - 1 if episode != "" else 0
-        endStr = "\n"
-        main(".")
-        print(endStr)
+    if __name__ == "__main__":
+        if "--subs" in sys.argv:
+            remux_subtitles(".")
+            exit()
+        else:
+            TV = "n" not in input("TV show mode? (Y/n) ").lower()
+            if TV:
+                title = input("Please enter the title of the TV Show: ")
+                season = int(input("Which season is this? "))
+                episode = input("What is the first episode in this disc? (defaults to 1) ")
+                episode = int(episode) - 1 if episode != "" else 0
+            endStr = "\n"
+            main(".")
+            print(endStr)
+except KeyboardInterrupt:
+    print("Exiting")
+    exit()
