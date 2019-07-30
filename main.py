@@ -21,6 +21,7 @@ def encode_cpu(filename: str, outname: str, video_codec="copy", crf=20, audio_co
         others = []
     log(filename)
     command = ["ffmpeg", "-hide_banner", "-threads", "0", "-hwaccel", "auto", "-i", filename,"-max_muxing_queue_size","16384", "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec]
+    filters = []
     if "--force-reencode" in sys.argv:
         video_codec="libx264"
     if upscale[0]:
@@ -33,10 +34,15 @@ def encode_cpu(filename: str, outname: str, video_codec="copy", crf=20, audio_co
     if tune:
         command.extend(["-tune", sys.argv[sys.argv.index("--tune") + 1]])
     if deinterlace:
-        command.extend(["-filter:v", "yadif"])
+        filters.append("yadif")
     command[11] = video_codec
     if video_codec == "libx264":
         command.extend(["-profile:v", "high", "-rc-lookahead", "60", "-preset", "slow"])
+    if "--crop" in sys.argv:
+        filters.append(sys.argv[sys.argv.index("--crop")+1])
+    if filters is not []:
+        command.append("-filter:v")
+        command.append(",".join(filters))
     command.extend(others)
     command.append(outname)
     print("\n")
