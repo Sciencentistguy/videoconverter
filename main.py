@@ -40,13 +40,15 @@ def encode_cpu(filename: str, outname: str, video_codec="copy", crf=20, audio_co
         command.extend(["-profile:v", "high", "-rc-lookahead", "60", "-preset", "slow"])
     if "--crop" in sys.argv:
         filters.append(sys.argv[sys.argv.index("--crop")+1])
-    if filters is not []:
+    if not filters == []:
         command.append("-filter:v")
         command.append(",".join(filters))
     command.extend(others)
     command.append(outname)
     print("\n")
     print(*command, "\n")
+    if "--sim" in sys.argv:
+        return
     subprocess.run(command)
 
 
@@ -248,10 +250,11 @@ def main(directory: str):
             width = 0
         if not width % 2 == 0:
             width += 1
+        deinterlace = "progressive" not in parsed_info["video"][video_stream]["field_order"]
         if "--gpu" in sys.argv:
-            encode_gpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=("--deinterlace" in sys.argv))
+            encode_gpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=deinterlace)
         else:
-            encode_cpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=("--deinterlace" in sys.argv))
+            encode_cpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=deinterlace)
 
 try:
 
