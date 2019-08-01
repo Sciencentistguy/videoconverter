@@ -20,7 +20,7 @@ def encode_cpu(filename: str, outname: str, video_codec="copy", crf=20, audio_co
     if others is None:
         others = []
     log(filename)
-    command = ["ffmpeg", "-hide_banner", "-threads", "0", "-hwaccel", "auto", "-i", filename, "-max_muxing_queue_size", "16384", "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec, "-cutoff", "18000"]
+    command = ["ffmpeg", "-hide_banner", "-threads", "0", "-hwaccel", "auto", "-i", filename, "-max_muxing_queue_size", "16384", "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec, "-cutoff", "18000", "-vbr", "5"]
     filters = []
     if "--force-reencode" in sys.argv:
         video_codec = "libx264"
