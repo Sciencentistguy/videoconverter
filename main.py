@@ -37,7 +37,7 @@ def encode_cpu(filename: str, outname: str, video_codec="copy", crf=20, audio_co
         filters.append("yadif")
     command[11] = video_codec
     if video_codec == "libx264":
-        command.extend(["-profile:v", "high", "-rc-lookahead", "60", "-preset", "slow"])
+        command.extend(["-profile:v", "high", "-rc-lookahead", "250", "-preset", "slow"])
     if "--crop" in sys.argv:
         filters.append(sys.argv[sys.argv.index("--crop")+1])
     if not filters == []:
