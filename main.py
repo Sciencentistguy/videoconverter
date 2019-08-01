@@ -250,7 +250,10 @@ def main(directory: str):
             width = 0
         if not width % 2 == 0:
             width += 1
-        deinterlace = "progressive" not in parsed_info["video"][video_stream]["field_order"]
+        try:
+            deinterlace = "progressive" not in parsed_info["video"][video_stream]["field_order"]
+        except KeyError:
+            deinterlace = False
         if "--gpu" in sys.argv:
             encode_gpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=deinterlace)
         else:
