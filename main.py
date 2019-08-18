@@ -16,34 +16,38 @@ def log(i: str):
         print(i)
 
 
-def encode_cpu(filename: str, outname: str, video_codec="copy", crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=(False, 0), tune=False, deinterlace=False):
+def encode_cpu(filename: str, outname: str, video_codec: str, crf: int, audio_codec="copy", subtitle_codec="copy",
+               others: list = None, tune=False, deinterlace=False, hwaccel=True):
+    log(filename)
     if others is None:
         others = []
-    log(filename)
-    command = ["ffmpeg", "-hide_banner", "-threads", "0", "-hwaccel", "auto", "-i", filename, "-max_muxing_queue_size", "16384", "-c:v", video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec, "-cutoff", "18000", "-vbr", "5"]
-    if "--nohw" in sys.argv:
-        command.remove("-hwaccel")
-        command.remove("auto")
     filters = []
-    if "--force-reencode" in sys.argv:
-        video_codec = "libx264"
-    if upscale[0]:
-        command.extend(["-vf", f"scale={upscale[1]}:720"])
-        video_codec = "libx264"
+    command = ["ffmpeg", "-hide_banner", "-threads", "0", "-i", filename, "-max_muxing_queue_size", "16384", "-c:v",
+               video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec, "-cutoff", "18000", "-vbr", "5"]
+
+    if hwaccel:
+        command.insert(4, "-hwaccel")
+        command.insert(5, "auto")
+
     if video_codec != "copy":
         command.extend(["-crf", str(crf)])
+
     if tune:
         command.extend(["-tune", sys.argv[sys.argv.index("--tune") + 1]])
+
     if deinterlace:
         filters.append("yadif")
-    command[11] = video_codec
+
     if video_codec == "libx264":
         command.extend(["-profile:v", "high", "-rc-lookahead", "250", "-preset", "slow"])
+
     if "--crop" in sys.argv:
         filters.append(sys.argv[sys.argv.index("--crop") + 1])
+
     if not filters == []:
         command.append("-filter:v")
         command.append(",".join(filters))
+
     command.extend(others)
     command.append(outname)
     print("\n")
@@ -53,26 +57,30 @@ def encode_cpu(filename: str, outname: str, video_codec="copy", crf=20, audio_co
     subprocess.run(command)
 
 
-def encode_gpu(filename: str, outname: str, video_codec: str, crf=20, audio_codec="copy", subtitle_codec="copy", others: list = None, upscale=(False, 0), tune=False, deinterlace=False):
-    if "--force-reencode" in sys.argv:
-        video_codec = "hevc_nvenc"
+def encode_gpu(filename: str, outname: str, video_codec: str, crf: int, audio_codec="copy", subtitle_codec="copy",
+               others: list = None, deinterlace=False, hwaccel=True):
     if video_codec == "copy":
-        encode_cpu(filename, outname, video_codec, crf, audio_codec, subtitle_codec, others, upscale, tune, deinterlace)
+        encode_cpu(filename, outname, video_codec, crf, audio_codec, subtitle_codec, others, deinterlace)
         return
+
     if others is None:
         others = []
+
     log(filename)
-    command = ["ffmpeg", "-hide_banner", "-threads", "0", "-hwaccel", "auto", "-i", filename, "-c:v", "hevc_nvenc", "-c:a", audio_codec, "-c:s", subtitle_codec]
+    command = ["ffmpeg", "-hide_banner", "-threads", "0", "-hwaccel", "auto", "-i", filename, "-c:v", "hevc_nvenc",
+               "-c:a", audio_codec, "-c:s", subtitle_codec]
     filters = ["-filter:v", "hwupload_cuda,"]
+
     if deinterlace:
-        filters[1] += "yadif_cuda,"
-    if upscale[0]:
-        filters[1] += f"scale_npp=w={upscale[1]}:h=720:interp_algo=lanczos,"
+        filters[1] += "yadif_cuda"
+
     if audio_codec == "libfdk_aac":
         command.extend(["-cutoff", 18000])
+
     command.extend(["-rc", "constqp", "-qp", str(crf), "-preset", "slow", "-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"])
-    filters[1] = filters[1][:-1]
-    command.extend(filters)
+
+    if len(filters) > 2:
+        command.extend(filters)
     command.extend(others)
     command.append(outname)
     print("\n", *command, "\n")
@@ -103,7 +111,8 @@ def remux_subtitles(directory: str):
         if filename.endswith("srt"):
             filelist.remove(filename)
     for filename in filelist:
-        subprocess.call(["ffmpeg", "-i", filename, "-i", filename[:-4] + ".srt", "-c:v", "copy", "-c:a", "copy", "-c:s", "copy", "-map", "0", "-map", "1", f"newfiles/{filename[:-4] + '.mkv'}"])
+        subprocess.call(["ffmpeg", "-i", filename, "-i", filename[:-4] + ".srt", "-c:v", "copy", "-c:a", "copy", "-c:s",
+                         "copy", "-map", "0", "-map", "1", f"newfiles/{filename[:-4] + '.mkv'}"])
 
 
 def main(directory: str):
@@ -242,23 +251,17 @@ def main(directory: str):
         endStr += f"{filename} -> {outname}\n"
 
         additional_cmds = codec_cmds + map_cmds
-        crf = 20
-        if "--crf" in sys.argv:
-            crf = int(sys.argv[sys.argv.index("--crf") + 1])
-        if upscale:
-            width = int(parsed_info["video"][video_stream]["width"] * (720 / parsed_info["video"][video_stream]["height"]))
-        else:
-            width = 0
-        if not width % 2 == 0:
-            width += 1
+        crf = int(sys.argv[sys.argv.index("--crf") + 1]) if "--crf" in sys.argv else 20
         try:
             deinterlace = "progressive" not in parsed_info["video"][video_stream]["field_order"]
         except KeyError:
             deinterlace = False
+        if "--force-reencode" in sys.argv:
+            video_codec = "libx264"
         if "--gpu" in sys.argv:
-            encode_gpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=deinterlace)
+            encode_gpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, deinterlace=deinterlace)
         else:
-            encode_cpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, upscale=(upscale, width), tune=("--tune" in sys.argv), deinterlace=deinterlace)
+            encode_cpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, tune=("--tune" in sys.argv), deinterlace=deinterlace, hwaccel="--nohwaccel" not in sys.argv)
 
 
 try:
