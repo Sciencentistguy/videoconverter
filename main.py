@@ -91,8 +91,7 @@ def check_dir(directory):
     global season, TV
     outdir = f"Season {season:02}" if TV else "newfiles"
     os.chdir(directory)
-    if not os.path.isdir(outdir):
-        os.mkdir(outdir)
+    mkdir(outdir)
     return outdir
 
 
@@ -104,8 +103,7 @@ def clean_name(filename: str):
 
 def remux_subtitles(directory: str):
     os.chdir(directory)
-    if not os.path.isdir("newfiles"):
-        os.mkdir("newfiles")
+    mkdir()
     filelist: list = os.listdir(directory)
     for filename in copy.deepcopy(filelist):
         if filename.endswith("srt"):
@@ -113,6 +111,11 @@ def remux_subtitles(directory: str):
     for filename in filelist:
         subprocess.call(["ffmpeg", "-i", filename, "-i", filename[:-4] + ".srt", "-c:v", "copy", "-c:a", "copy", "-c:s",
                          "copy", "-map", "0", "-map", "1", f"newfiles/{filename[:-4] + '.mkv'}"])
+
+
+def mkdir(name="newfiles"):
+    if not os.path.isdir(name):
+        os.mkdir(name)
 
 
 def main(directory: str):
