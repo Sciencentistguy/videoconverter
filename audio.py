@@ -1,17 +1,22 @@
 #!/bin/python
+from main import mkdir
 import os
 import subprocess
 
+
 def wavtoflac():
-    try:
-        os.mkdir("newfiles")
-    except FileExistsError:
-        pass
+    mkdir()
     for file in os.listdir("."):
-        if not "wav" in file:
+        if ".wav" not in file:
             continue
-        subprocess.run(["ffmpeg","-hide_banner","-i",file,"-c:a", "flac",f"newfiles/{file[:-4]}.flac"])
+        subprocess.run(["ffmpeg", "-hide_banner", "-i", file, "-c:a", "flac", f"newfiles/{file[:-4]}.flac"])
 
 
-if __name__=="__main__":
+def stripflac():
+    mkdir()
+    for file in os.listdir("."):
+        subprocess.run(["ffmpeg", "-hide_banner", "-i", file, "-c:a", "copy", "-map_metadata", "-1", f"newfiles/{file}"])
+
+
+if __name__ == "__main__":
     wavtoflac()
