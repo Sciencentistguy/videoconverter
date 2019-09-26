@@ -126,11 +126,15 @@ def main(directory: str):
     log(filelist)
     filelist.sort(key=lambda s: s.casefold())
     log(filelist)
+    exempt_strings = [".txt", ".rar", ".nfo", ".sfv", ".jpg", ".png", ".gif"]
+    exempt_strings.extend([f".r{x:02}" for x in range(100)])
     for filename in filelist:
         parsed_info = {"video": {}, "audio": {}, "subtitle": {}}
+        if os.path.isdir(filename):
+            continue
         if not "." in filename:
             continue
-        if ".txt" in filename or ".nfo" in filename:
+        if any(ext in filename for ext in exempt_strings):
             continue
         if os.path.isdir("./" + filename):
             continue
