@@ -1,8 +1,8 @@
 #!/bin/python
 import copy
-import subprocess
 import json
 import os
+import subprocess
 import sys
 
 
@@ -12,82 +12,43 @@ def log(i: str):
             f.write(i)
             f.write("\n")
         print(i)
-    if "-v" in sys.argv:
+    elif "-v" in sys.argv:
         print(i)
 
 
-def encode_cpu(filename: str, outname: str, video_codec: str, crf: int, audio_codec="copy", subtitle_codec="copy",
-               others: list = None, tune=False, deinterlace=False, hwaccel=True):
+def encode(filename: str, outname: str, video_codec: str, crf: int, deinterlace: bool, others: list = None):
+    cpu = not "nvenc" in video_codec
     log(filename)
     if others is None:
         others = []
     filters = []
-    command = ["ffmpeg", "-hide_banner", "-threads", "0", "-i", filename, "-max_muxing_queue_size", "16384", "-c:v",
-               video_codec, "-c:a", audio_codec, "-c:s", subtitle_codec, "-cutoff", "18000", "-vbr", "5"]
 
-    if hwaccel:
-        command.insert(4, "-hwaccel")
-        command.insert(5, "auto")
+    command = ["ffmpeg", "-hide_banner"]  # Hide the GPL blurb
+    command += ["-hwaccel", "auto"] if (not "--no-hwaccel" in sys.argv) else []  # Enable hardware acceleration
+    command += ["-threads", "0"]  # Max CPU threads
+    command += ["-i", filename, "-max_muxing_queue_size", "16384"]  # Input file
+    command += ["-c:v", video_codec, "-c:a", "copy", "-c:s", "copy"]  # Specify codecs
+    command += ["-cutoff", "18000", "-vbr", "5"]  # audio information
+    command += ["-crf", str(crf)] if (video_codec != "copy" and cpu) else []  # Set CRF
+    command += ["-tune", sys.argv[sys.argv.index("--tune") + 1]] if ("--tune" in sys.argv) else []  # Specify libx264 tune
 
-    if video_codec != "copy":
-        command.extend(["-crf", str(crf)])
+    command += ["-profile:v", "high", "-rc-lookahead", "250", "-preset", "slow"] if (video_codec == "libx264") else []  # Libx264 options
+    command += ["-rc", "constqp", "-qp", str(crf), "-preset", "slow", "-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"] if not cpu else []
+    filters += [sys.argv[sys.argv.index("--crop") + 1]] if ("--crop" in sys.argv) else []  # Crop filter
+    filters += (["yadif"] if cpu else ["hwupload_cuda", "yadif_cuda"]) if deinterlace else []  # Deinterlacing filter
 
-    if tune:
-        command.extend(["-tune", sys.argv[sys.argv.index("--tune") + 1]])
+    command += ["-filter:v", ",".join(filters)] if (filters != []) else []  # apply filters
 
-    if deinterlace:
-        filters.append("yadif")
-
-    if video_codec == "libx264":
-        command.extend(["-profile:v", "high", "-rc-lookahead", "250", "-preset", "slow"])
-
-    if "--crop" in sys.argv:
-        filters.append(sys.argv[sys.argv.index("--crop") + 1])
-
-    if not filters == []:
-        command.append("-filter:v")
-        command.append(",".join(filters))
-
-    command.extend(others)
-    command.append(outname)
+    command += others
+    command += [outname]
     print("\n")
     print(*command, "\n")
-    if "--sim" in sys.argv:
+    if "--sim" in sys.argv or "-s" in sys.argv:
         return
     subprocess.run(command)
 
 
-def encode_gpu(filename: str, outname: str, video_codec: str, crf: int, audio_codec="copy", subtitle_codec="copy",
-               others: list = None, deinterlace=False, hwaccel=True):
-    if video_codec == "copy":
-        encode_cpu(filename, outname, video_codec, crf, audio_codec, subtitle_codec, others, deinterlace)
-        return
-
-    if others is None:
-        others = []
-
-    log(filename)
-    command = ["ffmpeg", "-hide_banner", "-threads", "0", "-hwaccel", "auto", "-i", filename, "-c:v", "hevc_nvenc",
-               "-c:a", audio_codec, "-c:s", subtitle_codec]
-    filters = ["-filter:v", "hwupload_cuda,"]
-
-    if deinterlace:
-        filters[1] += "yadif_cuda"
-
-    if audio_codec == "libfdk_aac":
-        command.extend(["-cutoff", 18000])
-
-    command.extend(["-rc", "constqp", "-qp", str(crf), "-preset", "slow", "-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"])
-
-    if len(filters) > 2:
-        command.extend(filters)
-    command.extend(others)
-    command.append(outname)
-    print("\n", *command, "\n")
-    subprocess.run(command)
-
-
-def check_dir(directory):
+def prepare_directory(directory):
     global season, TV
     outdir = f"Season {season:02}" if TV else "newfiles"
     os.chdir(directory)
@@ -96,21 +57,7 @@ def check_dir(directory):
 
 
 def clean_name(filename: str):
-    if filename.endswith(".mkv"):
-        return filename
     return filename[:filename.rfind(".")] + ".mkv"
-
-
-def remux_subtitles(directory: str):
-    os.chdir(directory)
-    mkdir()
-    filelist: list = os.listdir(directory)
-    for filename in copy.deepcopy(filelist):
-        if filename.endswith("srt"):
-            filelist.remove(filename)
-    for filename in filelist:
-        subprocess.call(["ffmpeg", "-i", filename, "-i", filename[:-4] + ".srt", "-c:v", "copy", "-c:a", "copy", "-c:s",
-                         "copy", "-map", "0", "-map", "1", f"newfiles/{filename[:-4] + '.mkv'}"])
 
 
 def mkdir(name="newfiles"):
@@ -119,7 +66,7 @@ def mkdir(name="newfiles"):
 
 
 def main(directory: str):
-    outdir = check_dir(directory)
+    outdir = prepare_directory(directory)
     global episode
     global TV
     filelist: list = os.listdir(directory)
@@ -166,9 +113,9 @@ def main(directory: str):
         elif "hevc" in list(parsed_info["video"].values())[0]["codec_name"]:
             video_codec = "copy"
         upscale: bool = False
-        if not parsed_info["video"][video_stream]["height"] >= 700:
-            if "--upscale" in sys.argv:
-                upscale = True
+        # if not parsed_info["video"][video_stream]["height"] >= 700:
+        # if "--upscale" in sys.argv:
+        # upscale = True
         video_mapping = [list(parsed_info["video"].keys())[0]]
         # video ends
 
@@ -265,28 +212,32 @@ def main(directory: str):
             deinterlace = False
         if "--force-reencode" in sys.argv:
             video_codec = "libx264"
+
         if "--gpu" in sys.argv:
-            encode_gpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, deinterlace=deinterlace)
-        else:
-            encode_cpu(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, tune=("--tune" in sys.argv), deinterlace=deinterlace, hwaccel="--nohwaccel" not in sys.argv)
+            if video_codec == "libx264" or video_codec == "libx265":
+                video_codec = "hevc_nvenc"
+
+        encode(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, deinterlace=deinterlace)
 
 
-try:
-
-    if __name__ == "__main__":
-        if "--subs" in sys.argv:
-            remux_subtitles(".")
-            exit()
-        else:
-            TV = "n" not in input("TV show mode? (Y/n) ").lower()
-            if TV:
-                title = input("Please enter the title of the TV Show: ")
-                season = int(input("Which season is this? "))
-                episode = input("What is the first episode in this disc? (defaults to 1) ")
-                episode = int(episode) - 1 if episode != "" else 0
-            endStr = "\n"
-            main(".")
-            print(endStr)
-except KeyboardInterrupt:
-    print("Exiting")
-    exit()
+if __name__ == "__main__":
+    if "-h" in sys.argv or "--help" in sys.argv:
+        print("--help, -h", "Display this message", sep="\t\t")
+        print("--no-hwaccel", "Disable hardware accelerated decoding", sep="\t\t")
+        print("--tune <tune>", "Use libx264 tune <tune>. Does not work with --gpu", sep="\t\t")
+        print("--crop <cropfilter>", "Use a crop filter", sep="\t")
+        print("--simulate, -s", "Do everything apart from run the ffmpeg command", sep="\t\t")
+        print("--crf", "Specify a CRF value", sep="\t\t\t")
+        print("--force-reencode", "Rencode even if it is not needed", sep="\t")
+        print("--gpu", "Use GPU accelerated encoding (produces hevc)", sep="\t\t\t")
+        exit()
+    else:
+        TV = "n" not in input("TV show mode? (Y/n) ").lower()
+        if TV:
+            title = input("Please enter the title of the TV Show: ")
+            season = int(input("Which season is this? "))
+            episode = input("What is the first episode in this disc? (defaults to 1) ")
+            episode = int(episode) - 1 if episode != "" else 0
+        endStr = "\n"
+        main(".")
+        print(endStr)
