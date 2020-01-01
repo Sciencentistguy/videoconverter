@@ -7,12 +7,12 @@ import sys
 
 
 def log(i: str):
-    if "-V" in sys.argv:
+    if "-V" in sys.argv or "--Verbose" in sys.argv:
         with open("./videoconverter.log", "a") as f:
             f.write(i)
             f.write("\n")
         print(i)
-    elif "-v" in sys.argv:
+    elif "-v" in sys.argv or "--verbose" in sys.argv:
         print(i)
 
 
@@ -33,7 +33,7 @@ def encode(filename: str, outname: str, video_codec: str, crf: int, deinterlace:
     command += ["-tune", sys.argv[sys.argv.index("--tune") + 1]] if ("--tune" in sys.argv) else []  # Specify libx264 tune
 
     command += ["-profile:v", "high", "-rc-lookahead", "250", "-preset", "slow"] if (video_codec == "libx264") else []  # Libx264 options
-    command += ["-rc", "constqp", "-qp", str(crf), "-preset", "slow", "-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"] if not cpu else []
+    command += ["-rc", "constqp", "-qp", str(crf), "-preset", "slow", "-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"] if not cpu else []  # nvenc options (gpu mode)
     filters += [sys.argv[sys.argv.index("--crop") + 1]] if ("--crop" in sys.argv) else []  # Crop filter
     filters += (["yadif"] if cpu else ["hwupload_cuda", "yadif_cuda"]) if deinterlace else []  # Deinterlacing filter
 
@@ -43,17 +43,18 @@ def encode(filename: str, outname: str, video_codec: str, crf: int, deinterlace:
     command += [outname]
     print("\n")
     print(*command, "\n")
-    if "--sim" in sys.argv or "-s" in sys.argv:
+    global simulate_mode
+    if simulate_mode:
         return
     subprocess.run(command)
 
 
 def prepare_directory(directory):
-    global season, TV
-    outdir = f"Season {season:02}" if TV else "newfiles"
+    global season, tv_mode
+    out = f"Season {season:02}" if tv_mode else "newfiles"
     os.chdir(directory)
-    mkdir(outdir)
-    return outdir
+    mkdir(out)
+    return out
 
 
 def clean_name(filename: str):
@@ -61,14 +62,17 @@ def clean_name(filename: str):
 
 
 def mkdir(name="newfiles"):
+    global simulate_mode
+    if simulate_mode:
+        return
     if not os.path.isdir(name):
         os.mkdir(name)
 
 
 def main(directory: str):
-    outdir = prepare_directory(directory)
+    output_directory = prepare_directory(directory)
+    global tv_mode
     global episode
-    global TV
     filelist: list = os.listdir(directory)
     log(filelist)
     filelist.sort(key=lambda s: s.casefold())
@@ -85,7 +89,7 @@ def main(directory: str):
             continue
         if os.path.isdir("./" + filename):
             continue
-        if TV:
+        if tv_mode:
             episode += 1
         file_info = json.loads(subprocess.check_output(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
         log(file_info)
@@ -108,19 +112,15 @@ def main(directory: str):
             raise KeyError("The file provided has more than one video stream")
         video_stream = list(parsed_info["video"].keys())[0]
         video_codec = "libx264"
-        if "h264" in list(parsed_info["video"].values())[0]["codec_name"]:
+        file_video_codec = list(parsed_info["video"].values())[0]["codec_name"]
+        if "h264" in file_video_codec or "hevc" in file_video_codec:
             video_codec = "copy"
-        elif "hevc" in list(parsed_info["video"].values())[0]["codec_name"]:
-            video_codec = "copy"
-        upscale: bool = False
-        # if not parsed_info["video"][video_stream]["height"] >= 700:
-        # if "--upscale" in sys.argv:
-        # upscale = True
+        del file_video_codec
         video_mapping = [list(parsed_info["video"].keys())[0]]
         # video ends
 
         # audio starts
-        audio_mapping = []
+        audio_mapping: list = []
         try:
             if len(parsed_info["audio"]) <= 1:
                 audio_mapping = list(parsed_info["audio"].keys())
@@ -130,7 +130,7 @@ def main(directory: str):
                         if "eng" in str(v):
                             audio_mapping.append(int(k))
                             break
-        except KeyError:
+        except KeyError:  # if it falls over, just use all audio streams
             audio_mapping = list(parsed_info["audio"].keys())
 
         audio_mapping = list(set(audio_mapping))
@@ -139,10 +139,7 @@ def main(directory: str):
         audio_codecs = {}
         for k, v in parsed_info["audio"].items():
             try:
-                if "truehd" in v["codec_name"].lower():
-                    audio_codecs[k] = "flac"
-                    continue
-                if ("dts" in v["profile"].lower()) and ("ma" in v["profile"].lower()):
+                if "truehd" in v["codec_name"].lower() or (("dts" in v["profile"].lower()) and ("ma" in v["profile"].lower())):
                     audio_codecs[k] = "flac"
                     continue
             except KeyError:
@@ -194,15 +191,15 @@ def main(directory: str):
         for i in subtitle_mapping:
             map_cmds.extend(["-map", f"0:{i}"])
 
-        if TV:
+        if tv_mode:
             global title, season
             outname = f"{title} - s{season:02}e{episode:02}.mkv"
         else:
             outname = clean_name(filename)
 
         log(f"{filename} -> {outname}")
-        global endStr
-        endStr += f"{filename} -> {outname}\n"
+        global overall_mapping
+        overall_mapping += f"{filename} -> {outname}\n"
 
         additional_cmds = codec_cmds + map_cmds
         crf = int(sys.argv[sys.argv.index("--crf") + 1]) if "--crf" in sys.argv else 20
@@ -217,7 +214,7 @@ def main(directory: str):
             if video_codec == "libx264" or video_codec == "libx265":
                 video_codec = "hevc_nvenc"
 
-        encode(filename, f"{outdir}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, deinterlace=deinterlace)
+        encode(filename, f"{output_directory}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, deinterlace=deinterlace)
 
 
 if __name__ == "__main__":
@@ -230,14 +227,17 @@ if __name__ == "__main__":
         print("--crf", "Specify a CRF value", sep="\t\t\t")
         print("--force-reencode", "Rencode even if it is not needed", sep="\t")
         print("--gpu", "Use GPU accelerated encoding (produces hevc)", sep="\t\t\t")
+        print("--verbose, -v", "Verbose mode", sep="\t\t")
+        print("--Verbose, -V", "Verbose mode + file loggging", sep="\t\t")
         exit()
     else:
-        TV = "n" not in input("TV show mode? (Y/n) ").lower()
-        if TV:
+        simulate_mode = "--simulate" in sys.argv or "-s" in sys.argv
+        tv_mode = "n" not in input("TV show mode? (Y/n) ").lower()
+        if tv_mode:
             title = input("Please enter the title of the TV Show: ")
             season = int(input("Which season is this? "))
             episode = input("What is the first episode in this disc? (defaults to 1) ")
             episode = int(episode) - 1 if episode != "" else 0
-        endStr = "\n"
+        overall_mapping = "\n"
         main(".")
-        print(endStr)
+        print(overall_mapping)
