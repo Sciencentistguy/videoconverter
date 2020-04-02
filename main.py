@@ -1,4 +1,5 @@
 #!/bin/python
+import argparse
 import copy
 import json
 import os
@@ -7,12 +8,12 @@ import sys
 
 
 def log(i: str):
-    if "-V" in sys.argv or "--Verbose" in sys.argv:
+    if args.Verbose:
         with open("./videoconverter.log", "a") as f:
             f.write(i)
             f.write("\n")
         print(i)
-    elif "-v" in sys.argv or "--verbose" in sys.argv:
+    elif args.verbose:
         print(i)
 
 
@@ -24,17 +25,17 @@ def encode(filename: str, outname: str, video_codec: str, crf: int, deinterlace:
     filters = []
 
     command = ["ffmpeg", "-hide_banner"]  # Hide the GPL blurb
-    command += ["-hwaccel", "auto"] if (not "--no-hwaccel" in sys.argv) else []  # Enable hardware acceleration
+    command += ["-hwaccel", "auto"] if (not args.no_hwaccel) else []  # Enable hardware acceleration
     command += ["-threads", "0"]  # Max CPU threads
     command += ["-i", filename, "-max_muxing_queue_size", "16384"]  # Input file
     command += ["-c:v", video_codec, "-c:a", "copy", "-c:s", "copy"]  # Specify codecs
     command += ["-cutoff", "18000", "-vbr", "5"]  # audio information
     command += ["-crf", str(crf)] if (video_codec != "copy" and cpu) else []  # Set CRF
-    command += ["-tune", sys.argv[sys.argv.index("--tune") + 1]] if ("--tune" in sys.argv) else []  # Specify libx264 tune
+    command += ["-tune", args.tune] if (args.tune is not None) else []  # Specify libx264 tune
 
     command += ["-profile:v", "high", "-rc-lookahead", "250", "-preset", "slow"] if (video_codec == "libx264") else []  # Libx264 options
     command += ["-rc", "constqp", "-qp", str(crf), "-preset", "slow", "-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"] if not cpu else []  # nvenc options (gpu mode)
-    filters += [sys.argv[sys.argv.index("--crop") + 1]] if ("--crop" in sys.argv) else []  # Crop filter
+    filters += [args.crop] if (args.crop is not None) else []  # Crop filter
     filters += (["yadif"] if cpu else ["hwupload_cuda", "yadif_cuda"]) if deinterlace else []  # Deinterlacing filter
 
     command += ["-filter:v", ",".join(filters)] if (filters != []) else []  # apply filters
@@ -43,8 +44,7 @@ def encode(filename: str, outname: str, video_codec: str, crf: int, deinterlace:
     command += [outname]
     print("\n")
     print(*command, "\n")
-    global simulate_mode
-    if simulate_mode:
+    if args.simulate:
         return
     subprocess.run(command)
 
@@ -62,8 +62,7 @@ def clean_name(filename: str):
 
 
 def mkdir(name="newfiles"):
-    global simulate_mode
-    if simulate_mode:
+    if args.simulate:
         return
     if not os.path.isdir(name):
         os.mkdir(name)
@@ -198,19 +197,24 @@ def main(directory: str):
             outname = clean_name(filename)
 
         log(f"{filename} -> {outname}")
-        global overall_mapping
-        overall_mapping += f"{filename} -> {outname}\n"
+        global rename_log
+        rename_log += f"{filename} -> {outname}\n"
 
         additional_cmds = codec_cmds + map_cmds
-        crf = int(sys.argv[sys.argv.index("--crf") + 1]) if "--crf" in sys.argv else 20
+        crf = args.crf if args.crf is not None else 20
+
         try:
             deinterlace = "progressive" not in parsed_info["video"][video_stream]["field_order"]
         except KeyError:
             deinterlace = False
-        if "--force-reencode" in sys.argv:
+
+        if args.deinterlace:
+            deinterlace = True
+
+        if args.force_reencode or deinterlace:
             video_codec = "libx264"
 
-        if "--gpu" in sys.argv:
+        if args.gpu:
             if video_codec == "libx264" or video_codec == "libx265":
                 video_codec = "hevc_nvenc"
 
@@ -218,26 +222,25 @@ def main(directory: str):
 
 
 if __name__ == "__main__":
-    if "-h" in sys.argv or "--help" in sys.argv:
-        print("--help, -h", "Display this message", sep="\t\t")
-        print("--no-hwaccel", "Disable hardware accelerated decoding", sep="\t\t")
-        print("--tune <tune>", "Use libx264 tune <tune>. Does not work with --gpu", sep="\t\t")
-        print("--crop <cropfilter>", "Use a crop filter", sep="\t")
-        print("--simulate, -s", "Do everything apart from run the ffmpeg command", sep="\t\t")
-        print("--crf", "Specify a CRF value", sep="\t\t\t")
-        print("--force-reencode", "Rencode even if it is not needed", sep="\t")
-        print("--gpu", "Use GPU accelerated encoding (produces hevc)", sep="\t\t\t")
-        print("--verbose, -v", "Verbose mode", sep="\t\t")
-        print("--Verbose, -V", "Verbose mode + file loggging", sep="\t\t")
-        exit()
-    else:
-        simulate_mode = "--simulate" in sys.argv or "-s" in sys.argv
-        tv_mode = "n" not in input("TV show mode? (Y/n) ").lower()
-        if tv_mode:
-            title = input("Please enter the title of the TV Show: ")
-            season = int(input("Which season is this? "))
-            episode = input("What is the first episode in this disc? (defaults to 1) ")
-            episode = int(episode) - 1 if episode != "" else 0
-        overall_mapping = "\n"
-        main(".")
-        print(overall_mapping)
+    parser = argparse.ArgumentParser(description="Convert video files")
+    parser.add_argument("--crf", type=int, help="Specify a CRF value.")
+    parser.add_argument("-c", "--crop", type=str, help="Specify a crop filter. These are of the format 'crop=height:width:x:y'.")
+    parser.add_argument("-d", "--deinterlace", action="store_true", help="Force deinterlacing of video.")
+    parser.add_argument("--force-reencode", action="store_true", help="Force a reencode, even if it is not needed.")
+    parser.add_argument("-g", "--gpu", action="store_true", help="Uuse GPU accelerated encoding (nvenc). This produces h.265.")
+    parser.add_argument("--no-hwaccel", action="store_true", help="Disable hardware accelerated decoding.")
+    parser.add_argument("-s", "--simulate", action="store_true", help="Do everything appart from run the ffmpeg command")
+    parser.add_argument("-t", "--tune", type=str, help="Specify libx264 tune. Options are: 'film animation grain stillimage psnr ssim fastdecode zerolatency'. Does not work with GPU mode.")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose mode.")
+    parser.add_argument("-V", "--Verbose", action="store_true", help="Verbose mode with a logfile.")
+    args = parser.parse_args()
+    log(args)
+    tv_mode = "n" not in input("TV show mode? (Y/n) ").lower()
+    if tv_mode:
+        title = input("Please enter the title of the TV Show: ")
+        season = int(input("Which season is this? "))
+        episode = input("What is the first episode in this disc? (defaults to 1) ")
+        episode = int(episode) - 1 if episode != "" else 0
+    rename_log = "\n"
+    main(".")
+    print(rename_log)
