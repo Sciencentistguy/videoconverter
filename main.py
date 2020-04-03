@@ -20,8 +20,7 @@ def log(i: str):
 def encode(filename: str, outname: str, video_codec: str, crf: int, deinterlace: bool, others: list = None):
     cpu = not "nvenc" in video_codec
     log(filename)
-    if others is None:
-        others = []
+    others = [] if others is None else others
     filters = []
 
     command = ["ffmpeg", "-hide_banner"]  # Hide the GPL blurb
@@ -70,16 +69,14 @@ def mkdir(name="newfiles"):
 
 def main(directory: str):
     output_directory = prepare_directory(directory)
-    global tv_mode
-    global episode
+    global tv_mode, episode, title, season
     filelist: list = os.listdir(directory)
     log(filelist)
     filelist.sort(key=lambda s: s.casefold())
     log(filelist)
-    exempt_strings = [".txt", ".rar", ".nfo", ".sfv", ".jpg", ".png", ".gif"]
+    exempt_strings = [".txt", ".rar", ".nfo", ".sfv", ".jpg", ".png", ".gif", ".py", ".md"]
     exempt_strings.extend([f".r{x:02}" for x in range(100)])
     for filename in filelist:
-        parsed_info = {"video": {}, "audio": {}, "subtitle": {}}
         if os.path.isdir(filename):
             continue
         if not "." in filename:
@@ -88,137 +85,153 @@ def main(directory: str):
             continue
         if os.path.isdir("./" + filename):
             continue
+        if filename[0] == ".":
+            continue
         if tv_mode:
             episode += 1
-        file_info = json.loads(subprocess.check_output(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
-        log(file_info)
-        streams: list = file_info["streams"]
-
-        for stream in streams:
-            if "video" in stream["codec_type"]:
-                parsed_info["video"][stream["index"]] = stream
-            if "audio" in stream["codec_type"]:
-                parsed_info["audio"][stream["index"]] = stream
-            if "subtitle" in stream["codec_type"]:
-                parsed_info["subtitle"][stream["index"]] = stream
-
-        for k, v in copy.deepcopy(parsed_info)["video"].items():
-            if "mjpeg" in v["codec_name"] or "png" in v["codec_name"]:
-                parsed_info["video"].pop(k)
-
-        # video starts
-        if len(parsed_info["video"]) > 1:
-            raise KeyError("The file provided has more than one video stream")
-        video_stream = list(parsed_info["video"].keys())[0]
-        video_codec = "libx264"
-        file_video_codec = list(parsed_info["video"].values())[0]["codec_name"]
-        if "h264" in file_video_codec or "hevc" in file_video_codec:
-            video_codec = "copy"
-        del file_video_codec
-        video_mapping = [list(parsed_info["video"].keys())[0]]
-        # video ends
-
-        # audio starts
-        audio_mapping: list = []
-        try:
-            if len(parsed_info["audio"]) <= 1:
-                audio_mapping = list(parsed_info["audio"].keys())
-            else:  # check for eng
-                for k, i in parsed_info["audio"].items():
-                    for v in i["tags"].values():
-                        if "eng" in str(v):
-                            audio_mapping.append(int(k))
-                            break
-        except KeyError:  # if it falls over, just use all audio streams
-            audio_mapping = list(parsed_info["audio"].keys())
-
-        audio_mapping = list(set(audio_mapping))
-        audio_mapping.sort()
-
-        audio_codecs = {}
-        for k, v in parsed_info["audio"].items():
-            try:
-                if "truehd" in v["codec_name"].lower() or (("dts" in v["profile"].lower()) and ("ma" in v["profile"].lower())):
-                    audio_codecs[k] = "flac"
-                    continue
-            except KeyError:
-                pass
-            if "aac" in v["codec_name"] or "flac" in v["codec_name"]:
-                audio_codecs[k] = "copy"
-            else:
-                audio_codecs[k] = "libfdk_aac"
-        # audio ends
-
-        # subtitle starts
-        subtitle_mapping = []
-        if len(parsed_info["subtitle"]) <= 1:
-            subtitle_mapping = list(parsed_info["subtitle"].keys())
-        else:  # check for eng. if there are no eng streams, and one or more streams have no metadata, add all
-            for k, i in parsed_info["subtitle"].items():
-                try:
-                    for v in i["tags"].values():
-                        if "eng" in str(v):
-                            subtitle_mapping.append(int(k))
-                            break
-                except KeyError:
-                    continue
-            if len(subtitle_mapping) == 0:
-                subtitle_mapping = list(parsed_info["subtitle"].keys())
-
-        subtitle_mapping = list(set(subtitle_mapping))
-        subtitle_mapping.sort()
-
-        subtitle_codecs = {}
-        for k, v in parsed_info["subtitle"].items():
-            if ("pgs" in v["codec_name"]) or ("dvd" in v["codec_name"]):
-                subtitle_codecs[k] = "copy"
-            else:
-                subtitle_codecs[k] = "ass"
-        # subtitle ends
-
-        codec_cmds = []
-        for c, i in enumerate(audio_mapping):
-            codec_cmds.extend([f"-c:a:{c}", audio_codecs[i]])
-        for c, i in enumerate(subtitle_mapping):
-            codec_cmds.extend([f"-c:s:{c}", subtitle_codecs[i]])
-
-        map_cmds = []
-        for i in video_mapping:
-            map_cmds.extend(["-map", f"0:{i}"])
-        for i in audio_mapping:
-            map_cmds.extend(["-map", f"0:{i}"])
-        for i in subtitle_mapping:
-            map_cmds.extend(["-map", f"0:{i}"])
-
-        if tv_mode:
-            global title, season
             outname = f"{title} - s{season:02}e{episode:02}.mkv"
         else:
             outname = clean_name(filename)
+        process(filename, f"{output_directory}/{outname}")
 
-        log(f"{filename} -> {outname}")
-        global rename_log
-        rename_log += f"{filename} -> {outname}\n"
 
-        additional_cmds = codec_cmds + map_cmds
-        crf = args.crf if args.crf is not None else 20
+def analyse_video(parsed_info) -> (list, str):
+    if len(parsed_info["video"]) > 1:
+        raise KeyError("The file provided has more than one video stream")
+    video_codec = "libx264"
+    file_video_codec = list(parsed_info["video"].values())[0]["codec_name"]
+    if "h264" in file_video_codec or "hevc" in file_video_codec:
+        video_codec = "copy"
+    video_mapping = [list(parsed_info["video"].keys())[0]]
+    return video_mapping, video_codec
 
+
+def analyse_audio(parsed_info) -> (list, dict):
+    audio_mapping: list = []
+    try:
+        if len(parsed_info["audio"]) <= 1:
+            audio_mapping = list(parsed_info["audio"].keys())
+        else:  # check for eng
+            for k, i in parsed_info["audio"].items():
+                for v in i["tags"].values():
+                    if "eng" in str(v):
+                        audio_mapping.append(int(k))
+                        break
+    except KeyError:  # if it falls over, just use all audio streams
+        audio_mapping = list(parsed_info["audio"].keys())
+
+    audio_mapping = list(set(audio_mapping))
+    audio_mapping.sort()
+
+    audio_codecs = {}
+    for k, v in parsed_info["audio"].items():
         try:
-            deinterlace = "progressive" not in parsed_info["video"][video_stream]["field_order"]
+            if "truehd" in v["codec_name"].lower() or (("dts" in v["profile"].lower()) and ("ma" in v["profile"].lower())):
+                audio_codecs[k] = "flac"
+                continue
         except KeyError:
-            deinterlace = False
+            pass
+        if "aac" in v["codec_name"] or "flac" in v["codec_name"]:
+            audio_codecs[k] = "copy"
+        else:
+            audio_codecs[k] = "libfdk_aac"
+    return audio_mapping, audio_codecs
 
-        if args.deinterlace:
-            deinterlace = True
 
-        if args.force_reencode or deinterlace:
-            video_codec = "libx264"
+def analyse_subtitles(parsed_info) -> (list, dict):
+    subtitle_mapping = []
+    if len(parsed_info["subtitle"]) <= 1:
+        subtitle_mapping = list(parsed_info["subtitle"].keys())
+    else:  # check for eng. if there are no eng streams, and one or more streams have no metadata, add all
+        for k, i in parsed_info["subtitle"].items():
+            try:
+                for v in i["tags"].values():
+                    if "eng" in str(v):
+                        subtitle_mapping.append(int(k))
+                        break
+            except KeyError:
+                continue
+        if len(subtitle_mapping) == 0:
+            subtitle_mapping = list(parsed_info["subtitle"].keys())
 
-        if args.gpu:
-            if video_codec == "libx264" or video_codec == "libx265":
-                video_codec = "hevc_nvenc"
+    subtitle_mapping = list(set(subtitle_mapping))
+    subtitle_mapping.sort()
 
-        encode(filename, f"{output_directory}/{outname}", crf=crf, video_codec=video_codec, others=additional_cmds, deinterlace=deinterlace)
+    subtitle_codecs = {}
+    for k, v in parsed_info["subtitle"].items():
+        if ("pgs" in v["codec_name"]) or ("dvd" in v["codec_name"]):
+            subtitle_codecs[k] = "copy"
+        else:
+            subtitle_codecs[k] = "ass"
+    return subtitle_mapping, subtitle_codecs
+
+
+def probe_video(filename: str) -> dict:
+    return json.loads(subprocess.check_output(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
+
+
+def process(filename: str, outname: str):
+    global tv_mode, episode
+    parsed_info = {"video": {}, "audio": {}, "subtitle": {}}
+    file_info = probe_video(filename)
+    log(file_info)
+    streams: list = file_info["streams"]
+
+    for stream in streams:
+        parsed_info[stream["codec_type"]][stream["index"]] = stream
+        continue
+        if "video" in stream["codec_type"]:
+            parsed_info["video"][stream["index"]] = stream
+        if "audio" in stream["codec_type"]:
+            parsed_info["audio"][stream["index"]] = stream
+        if "subtitle" in stream["codec_type"]:
+            parsed_info["subtitle"][stream["index"]] = stream
+
+    for k, v in copy.deepcopy(parsed_info)["video"].items():
+        if "mjpeg" in v["codec_name"] or "png" in v["codec_name"]:
+            parsed_info["video"].pop(k)
+
+    video_mapping, video_codec = analyse_video(parsed_info)
+    audio_mapping, audio_codecs = analyse_audio(parsed_info)
+    subtitle_mapping, subtitle_codecs = analyse_subtitles(parsed_info)
+
+    codec_cmds = []
+    for c, i in enumerate(audio_mapping):
+        codec_cmds.extend([f"-c:a:{c}", audio_codecs[i]])
+    for c, i in enumerate(subtitle_mapping):
+        codec_cmds.extend([f"-c:s:{c}", subtitle_codecs[i]])
+
+    map_cmds = []
+    for i in video_mapping:
+        map_cmds.extend(["-map", f"0:{i}"])
+    for i in audio_mapping:
+        map_cmds.extend(["-map", f"0:{i}"])
+    for i in subtitle_mapping:
+        map_cmds.extend(["-map", f"0:{i}"])
+
+    log(f"{filename} -> {outname}")
+    global rename_log
+    rename_log += f"{filename} -> {outname}\n"
+
+    additional_cmds = codec_cmds + map_cmds
+    crf = args.crf if args.crf is not None else 20
+
+    try:
+        deinterlace = "progressive" not in parsed_info["video"][video_mapping[0]]["field_order"]
+    except KeyError:
+        deinterlace = False
+
+    if args.deinterlace:
+        deinterlace = True
+
+    if args.force_reencode or deinterlace:
+        video_codec = "libx264"
+
+    if args.gpu:
+        if video_codec == "libx264" or video_codec == "libx265":
+            video_codec = "hevc_nvenc"
+
+    encode(filename, outname, crf=crf, video_codec=video_codec, others=additional_cmds, deinterlace=deinterlace)
 
 
 if __name__ == "__main__":
