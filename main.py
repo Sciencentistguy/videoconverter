@@ -18,7 +18,7 @@ def log(i: str):
 
 
 def encode(filename: str, outname: str, video_codec: str, crf: int, deinterlace: bool, others: list = None):
-    cpu = not "nvenc" in video_codec
+    cpu = "nvenc" not in video_codec
     log(filename)
     others = [] if others is None else others
     filters = []
@@ -32,8 +32,20 @@ def encode(filename: str, outname: str, video_codec: str, crf: int, deinterlace:
     command += ["-crf", str(crf)] if (video_codec != "copy" and cpu) else []  # Set CRF
     command += ["-tune", args.tune] if (args.tune is not None) else []  # Specify libx264 tune
 
-    command += ["-profile:v", "high", "-rc-lookahead", "250", "-preset", "slow"] if (video_codec == "libx264") else []  # Libx264 options
-    command += ["-rc", "constqp", "-qp", str(crf), "-preset", "slow", "-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"] if not cpu else []  # nvenc options (gpu mode)
+    command += ["-profile:v", "high", "-rc-lookahead", "250", "-preset",
+                "slow"] if (video_codec == "libx264") else []  # Libx264 options
+    command += ["-rc",
+                "constqp",
+                "-qp",
+                str(crf),
+                "-preset",
+                "slow",
+                "-profile:v",
+                "main",
+                "-b:v",
+                "0",
+                "-rc-lookahead",
+                "32"] if not cpu else []  # nvenc options (gpu mode)
     filters += [args.crop] if (args.crop is not None) else []  # Crop filter
     filters += (["yadif"] if cpu else ["hwupload_cuda", "yadif_cuda"]) if deinterlace else []  # Deinterlacing filter
 
@@ -79,7 +91,7 @@ def main(directory: str):
     for filename in filelist:
         if os.path.isdir(filename):
             continue
-        if not "." in filename:
+        if "." not in filename:
             continue
         if any(ext in filename for ext in exempt_strings):
             continue
@@ -108,25 +120,29 @@ def analyse_video(parsed_info) -> (list, str):
 
 def analyse_audio(parsed_info) -> (list, dict):
     audio_mapping: list = []
-    try:
-        if len(parsed_info["audio"]) <= 1:
-            audio_mapping = list(parsed_info["audio"].keys())
-        else:  # check for eng
-            for k, i in parsed_info["audio"].items():
-                for v in i["tags"].values():
-                    if "eng" in str(v):
-                        audio_mapping.append(int(k))
-                        break
-    except KeyError:  # if it falls over, just use all audio streams
+    if args.all_streams:
         audio_mapping = list(parsed_info["audio"].keys())
+    else:
+        try:
+            if len(parsed_info["audio"]) <= 1:
+                audio_mapping = list(parsed_info["audio"].keys())
+            else:  # check for eng
+                for k, i in parsed_info["audio"].items():
+                    for v in i["tags"].values():
+                        if "eng" in str(v):
+                            audio_mapping.append(int(k))
+                            break
+        except KeyError:  # if it falls over, just use all audio streams
+            audio_mapping = list(parsed_info["audio"].keys())
 
-    audio_mapping = list(set(audio_mapping))
-    audio_mapping.sort()
+    audio_mapping = sorted(set(audio_mapping))
 
     audio_codecs = {}
     for k, v in parsed_info["audio"].items():
         try:
-            if "truehd" in v["codec_name"].lower() or (("dts" in v["profile"].lower()) and ("ma" in v["profile"].lower())):
+            if "truehd" in v["codec_name"].lower() or (
+                ("dts" in v["profile"].lower()) and (
+                    "ma" in v["profile"].lower())):
                 audio_codecs[k] = "flac"
                 continue
         except KeyError:
@@ -140,22 +156,24 @@ def analyse_audio(parsed_info) -> (list, dict):
 
 def analyse_subtitles(parsed_info) -> (list, dict):
     subtitle_mapping = []
-    if len(parsed_info["subtitle"]) <= 1:
+    if args.all_streams:
         subtitle_mapping = list(parsed_info["subtitle"].keys())
-    else:  # check for eng. if there are no eng streams, and one or more streams have no metadata, add all
-        for k, i in parsed_info["subtitle"].items():
-            try:
-                for v in i["tags"].values():
-                    if "eng" in str(v):
-                        subtitle_mapping.append(int(k))
-                        break
-            except KeyError:
-                continue
-        if len(subtitle_mapping) == 0:
+    else:
+        if len(parsed_info["subtitle"]) <= 1:
             subtitle_mapping = list(parsed_info["subtitle"].keys())
+        else:  # check for eng. if there are no eng streams, and one or more streams have no metadata, add all
+            for k, i in parsed_info["subtitle"].items():
+                try:
+                    for v in i["tags"].values():
+                        if "eng" in str(v):
+                            subtitle_mapping.append(int(k))
+                            break
+                except KeyError:
+                    continue
+            if len(subtitle_mapping) == 0:
+                subtitle_mapping = list(parsed_info["subtitle"].keys())
 
-    subtitle_mapping = list(set(subtitle_mapping))
-    subtitle_mapping.sort()
+    subtitle_mapping = sorted(set(subtitle_mapping))
 
     subtitle_codecs = {}
     for k, v in parsed_info["subtitle"].items():
@@ -167,7 +185,9 @@ def analyse_subtitles(parsed_info) -> (list, dict):
 
 
 def probe_video(filename: str) -> dict:
-    return json.loads(subprocess.check_output(["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
+    return json.loads(
+        subprocess.check_output(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
 
 
 def process(filename: str, outname: str):
@@ -236,14 +256,29 @@ def process(filename: str, outname: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert video files")
+    parser.add_argument("-a", "--all-streams", action="store_true",
+                        help="Keep all streams, regardless of language metadata.")
     parser.add_argument("--crf", type=int, help="Specify a CRF value.")
-    parser.add_argument("-c", "--crop", type=str, help="Specify a crop filter. These are of the format 'crop=height:width:x:y'.")
+    parser.add_argument(
+        "-c",
+        "--crop",
+        type=str,
+        help="Specify a crop filter. These are of the format 'crop=height:width:x:y'.")
     parser.add_argument("-d", "--deinterlace", action="store_true", help="Force deinterlacing of video.")
     parser.add_argument("--force-reencode", action="store_true", help="Force a reencode, even if it is not needed.")
-    parser.add_argument("-g", "--gpu", action="store_true", help="Uuse GPU accelerated encoding (nvenc). This produces h.265.")
+    parser.add_argument(
+        "-g",
+        "--gpu",
+        action="store_true",
+        help="Uuse GPU accelerated encoding (nvenc). This produces h.265.")
     parser.add_argument("--no-hwaccel", action="store_true", help="Disable hardware accelerated decoding.")
-    parser.add_argument("-s", "--simulate", action="store_true", help="Do everything appart from run the ffmpeg command")
-    parser.add_argument("-t", "--tune", type=str, help="Specify libx264 tune. Options are: 'film animation grain stillimage psnr ssim fastdecode zerolatency'. Does not work with GPU mode.")
+    parser.add_argument("-s", "--simulate", action="store_true",
+                        help="Do everything appart from run the ffmpeg command")
+    parser.add_argument(
+        "-t",
+        "--tune",
+        type=str,
+        help="Specify libx264 tune. Options are: 'film animation grain stillimage psnr ssim fastdecode zerolatency'. Does not work with GPU mode.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Verbose mode.")
     parser.add_argument("-V", "--Verbose", action="store_true", help="Verbose mode with a logfile.")
     args = parser.parse_args()
