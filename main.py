@@ -7,6 +7,20 @@ import subprocess
 import sys
 
 
+def write_position_state():
+    with open("/tmp/videoconverter", "w") as f:
+        global title, season, epcount
+        f.write(f"{title}\n{season}\n{epcount}")
+
+
+def read_position() -> (str, str, str):
+    try:
+        with open("/tmp/videoconverter", "r") as f:
+            return f.read().rstrip().split(sep="\n")
+    except FileNotFoundError:
+        return "", "", ""
+
+
 def log(i: str):
     if args.Verbose:
         with open("./videoconverter.log", "a") as f:
@@ -105,15 +119,20 @@ def main(directory: str):
         else:
             outname = clean_name(filename)
         process(filename, f"{output_directory}/{outname}")
+        global epcount
+        epcount += 1
+    write_position_state()
 
 
 def analyse_video(parsed_info) -> (list, str):
     if len(parsed_info["video"]) > 1:
-        raise KeyError("The file provided has more than one video stream")
-    video_codec = "libx264"
+        raise ValueError("The file provided has more than one video stream")
     file_video_codec = list(parsed_info["video"].values())[0]["codec_name"]
-    if "h264" in file_video_codec or "hevc" in file_video_codec:
-        video_codec = "copy"
+    video_codec = "copy" if (
+        "h264" in file_video_codec or "hevc" in file_video_codec) else (
+        "hevc_nvenc" if args.gpu else "libx264")
+    if args.force_reencode or args.deinterlace:
+        video_codec = "libx264"
     video_mapping = [list(parsed_info["video"].keys())[0]]
     return video_mapping, video_codec
 
@@ -124,7 +143,7 @@ def analyse_audio(parsed_info) -> (list, dict):
         audio_mapping = list(parsed_info["audio"].keys())
     else:
         try:
-            if len(parsed_info["audio"]) <= 1:
+            if len(parsed_info["audio"]) <= 1:  # only one stream, use it
                 audio_mapping = list(parsed_info["audio"].keys())
             else:  # check for eng
                 for k, i in parsed_info["audio"].items():
@@ -132,6 +151,8 @@ def analyse_audio(parsed_info) -> (list, dict):
                         if "eng" in str(v):
                             audio_mapping.append(int(k))
                             break
+            if len(audio_mapping) == 0:  # if no english streams are found, use all streams
+                audio_mapping = list(parsed_info["audio"].keys())
         except KeyError:  # if it falls over, just use all audio streams
             audio_mapping = list(parsed_info["audio"].keys())
 
@@ -241,17 +262,13 @@ def process(filename: str, outname: str):
     except KeyError:
         deinterlace = False
 
-    if args.deinterlace:
-        deinterlace = True
-
-    if args.force_reencode or deinterlace:
-        video_codec = "libx264"
-
-    if args.gpu:
-        if video_codec == "libx264" or video_codec == "libx265":
-            video_codec = "hevc_nvenc"
-
-    encode(filename, outname, crf=crf, video_codec=video_codec, others=additional_cmds, deinterlace=deinterlace)
+    encode(
+        filename,
+        outname,
+        crf=crf,
+        video_codec=video_codec,
+        others=additional_cmds,
+        deinterlace=deinterlace or args.deinterlace)
 
 
 if __name__ == "__main__":
@@ -283,12 +300,33 @@ if __name__ == "__main__":
     parser.add_argument("-V", "--Verbose", action="store_true", help="Verbose mode with a logfile.")
     args = parser.parse_args()
     log(args)
+    loaded = read_position()  # title, season, epcount
+    epcount = 0
+    using = loaded[0] != ""
     tv_mode = "n" not in input("TV show mode? (Y/n) ").lower()
     if tv_mode:
-        title = input("Please enter the title of the TV Show: ")
-        season = int(input("Which season is this? "))
-        episode = input("What is the first episode in this disc? (defaults to 1) ")
-        episode = int(episode) - 1 if episode != "" else 0
+        title = input(
+            "Please enter the title of the TV Show: "
+            if not using else f"Please enter the title of the TV Show. Leave blank to use previous ({loaded[0]})")
+        if title == "":
+            title = loaded[0]
+            using = True
+        else:
+            using = False
+        while True:
+            season = input(
+                "Which season is this? "
+                if not using else f"Please enter the season number. Leave blank to use previous ({loaded[1]})")
+            if season == "":
+                season = loaded[1]
+            try:
+                season = int(season)
+            except ValueError:
+                continue
+            break
+        episode = input(f"What is the first episode in this disc? (defaults to {1 if not using else loaded[2]}) ")
+        episode = int(episode) - 1 if episode != "" else (0 if not using else int(loaded[2]) + 1)
+        epcount = int(episode)
     rename_log = "\n"
     main(".")
     print(rename_log)
