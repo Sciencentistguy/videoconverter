@@ -1,7 +1,7 @@
 # VideoConverter
 
 ## Usage
-Run `main.py` with python3, in the directory containing your media files. Use `-h` to see possible arguments.
+Run `main.py` with python 3, in the directory containing your media files. Use `-h` to see possible arguments.
 If no arguments are given, by default the program will ask if you want to enable TV show mode. If you do, then it will ask you to provide the show name, the current season, and the first episode in the current directory. (This is useful for DVD box sets, where each disk contains some episodes but not a full season.) TV show mode will then enable [renaming](https://support.plex.tv/articles/naming-and-organizing-your-tv-show-files/), and store the output in a folder named with the season.
 
 The program will analyse each file, and convert audio and video streams appropriately, to the following:
@@ -17,7 +17,9 @@ The program will analyse each file, and convert audio and video streams appropri
     * Else, aac, encoded with libfdk_aac, with the following flags: `-cutoff 18000 -vbr 5`
 * Subtitles
     * If the original stream is PGS (Bluray) or VobSub (DVD), it will be copied.
-    * Else, ssa (ass), envoded with ffmpeg's built in encoder, with no special flags.
+    * Else, ssa (ass), encoded with ffmpeg's built in encoder, with no special flags.
 
 All other streams are discarded.
 
+---
+Available under the GPL
