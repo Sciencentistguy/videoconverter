@@ -1,14 +1,15 @@
 #!/bin/python
 import argparse
+from argparse import Namespace
 import copy
 import json
 import os
 import subprocess
-import sys
+from typing import Any, List, Dict, Tuple, Union, cast
 
 
 class VideoConverter():
-    def __init__(self, args):
+    def __init__(self, args: Namespace):
         self.args = args
         self.log(args)
         self.tv_mode = "n" not in input("TV show mode? (Y/n) ").lower()
@@ -26,11 +27,11 @@ class VideoConverter():
                 using = False
             self.title = title
             while True:
-                season = input(
+                season: str = input(
                     "Which season is this? "
                     if not using else f"Please enter the season number. Leave blank to use previous ({loaded[1]})")
                 if season == "":
-                    season = loaded[1]
+                    season: str = loaded[1]
                 try:
                     self.season = int(season)
                 except ValueError:
@@ -38,9 +39,10 @@ class VideoConverter():
                 break
             episode = input(
                 f"What is the first episode in this disc? (defaults to {1 if not using else int(loaded[2])+1}) ")
-            self.episode = int(episode) - 1 if episode != "" else (0 if not using else int(loaded[2]))
+            self.episode: int = int(
+                episode) - 1 if episode != "" else (0 if not using else int(loaded[2]))
             self.epcount = int(self.episode)
-        self.rename_log = "\n"
+        self.rename_log: str = "\n"
 
     def run(self):
         self.main(".")
@@ -50,14 +52,17 @@ class VideoConverter():
         with open("/tmp/videoconverter", "w") as f:
             f.write(f"{self.title}\n{self.season}\n{self.epcount}")
 
-    def read_position(self) -> (str, str, str):
+    def read_position(self) -> Tuple[str, str, str]:
         try:
             with open("/tmp/videoconverter", "r") as f:
-                return f.read().rstrip().split(sep="\n")
+                ret = tuple(f.read().rstrip().split(sep="\n"))
+                if len(ret) != 3:
+                    raise ValueError("Malformed statefile.")
+                return ret[0], ret[1], ret[2]
         except FileNotFoundError:
             return "", "", ""
 
-    def log(self, i: str):
+    def log(self, i: Any):
         if self.args.Verbose:
             with open("./videoconverter.log", "a") as f:
                 f.write(i)
@@ -66,19 +71,25 @@ class VideoConverter():
         elif self.args.verbose:
             print(i)
 
-    def encode(self, filename: str, outname: str, video_codec: str, crf: int, deinterlace: bool, others: list = None):
+    def encode(self, filename: str, outname: str, video_codec: str, crf: int, deinterlace: bool, others: List[str] = []):
         self.log(filename)
-        others = [] if others is None else others
+        # others = [] if others is  else others
         filters = []
 
         command = ["ffmpeg", "-hide_banner"]  # Hide the GPL blurb
-        command += ["-hwaccel", "auto"] if (not self.args.no_hwaccel) else []  # Enable hardware acceleration
+        # Enable hardware acceleration
+        command += ["-hwaccel", "auto"] if (not self.args.no_hwaccel) else []
         command += ["-threads", "0"]  # Max CPU threads
-        command += ["-i", filename, "-max_muxing_queue_size", "16384"]  # Input file
+        command += ["-i", filename,
+                    "-max_muxing_queue_size", "16384"]  # Input file
         command += ["-c:v", video_codec]  # Specify video codec
-        command += ["-cutoff", "18000", "-vbr", "5"]  # libfdk_aac encoder settings
-        command += ["-crf", str(crf)] if (video_codec != "copy" and not self.args.gpu) else []  # Set CRF
-        command += ["-tune", self.args.tune] if (self.args.tune is not None) else []  # Specify libx264 tune
+        # libfdk_aac encoder settings
+        command += ["-cutoff", "18000", "-vbr", "5"]
+        command += ["-crf", str(crf)] if (video_codec !=
+                                          "copy" and not self.args.gpu) else []  # Set CRF
+        # Specify libx264 tune
+        command += ["-tune",
+                    self.args.tune] if (self.args.tune is not None) else []
 
         command += ["-profile:v", "high", "-rc-lookahead", "250", "-preset",
                     "slow"] if (video_codec == "libx264") else []  # Libx264 options
@@ -94,11 +105,13 @@ class VideoConverter():
                     "0",
                     "-rc-lookahead",
                     "32"] if self.args.gpu else []  # nvenc options (gpu mode)
-        filters += [self.args.crop] if (self.args.crop is not None) else []  # Crop filter
+        # Crop filter
+        filters += [self.args.crop] if (self.args.crop is not None) else []
         filters += (["yadif"] if not self.args.gpu else ["hwupload_cuda", "yadif_cuda"]
                     ) if deinterlace else []  # Deinterlacing filter
 
-        command += ["-filter:v", ",".join(filters)] if (filters != []) else []  # apply filters
+        # apply filters
+        command += ["-filter:v", ",".join(filters)] if (filters != []) else []
 
         command += others
         command += [outname]
@@ -108,7 +121,7 @@ class VideoConverter():
             return
         subprocess.run(command)
 
-    def prepare_directory(self, directory):
+    def prepare_directory(self, directory: str):
         out = f"Season {self.season:02}" if self.tv_mode else "newfiles"
         os.chdir(directory)
         self.mkdir(out)
@@ -117,17 +130,18 @@ class VideoConverter():
     def clean_name(self, filename: str):
         return filename[:filename.rfind(".")] + ".mkv"
 
-    def mkdir(self, name="newfiles"):
+    def mkdir(self, name: str):
         if self.args.simulate:
             return
         if not os.path.isdir(name):
             os.mkdir(name)
 
-    def analyse_video(self, parsed_info) -> (list, str):
+    def analyse_video(self, parsed_info: Dict[str, Dict[int, Dict[str, Union[str, int, Dict[str, Union[str, int]]]]]]) -> Tuple[List[int], str]:
         if len(parsed_info["video"]) > 1:
-            raise ValueError("The file provided has more than one video stream")
+            raise ValueError(
+                "The file provided has more than one video stream")
         file_video_codec = list(parsed_info["video"].values())[0]["codec_name"]
-        video_codec = "copy" if (
+        video_codec: str = "copy" if (
             "h264" in file_video_codec or "hevc" in file_video_codec) else (
             "hevc_nvenc" if self.args.gpu else "libx264")
         if self.args.force_reencode or self.args.deinterlace:
@@ -135,8 +149,8 @@ class VideoConverter():
         video_mapping = [list(parsed_info["video"].keys())[0]]
         return video_mapping, video_codec
 
-    def analyse_audio(self, parsed_info) -> (list, dict):
-        audio_mapping: list = []
+    def analyse_audio(self, parsed_info: Dict[str, Dict[int, Dict[str, Union[str, int, Dict[str, Union[str, int]]]]]]) -> Tuple[List[int], Dict[int, str]]:
+        audio_mapping: List[int] = []
         if self.args.all_streams:
             audio_mapping = list(parsed_info["audio"].keys())
         else:
@@ -144,10 +158,10 @@ class VideoConverter():
                 if len(parsed_info["audio"]) <= 1:  # only one stream, use it
                     audio_mapping = list(parsed_info["audio"].keys())
                 else:  # check for eng
-                    for k, i in parsed_info["audio"].items():
-                        for v in i["tags"].values():
-                            if "eng" in str(v):
-                                audio_mapping.append(int(k))
+                    for stream_index, stream in parsed_info["audio"].items():
+                        for tag in cast(Dict[str, Union[str, int]], stream["tags"]).values():
+                            if "eng" in str(tag):
+                                audio_mapping.append(int(stream_index))
                                 break
                 if len(audio_mapping) == 0:  # if no english streams are found, use all streams
                     audio_mapping = list(parsed_info["audio"].keys())
@@ -157,22 +171,24 @@ class VideoConverter():
         audio_mapping = sorted(set(audio_mapping))
 
         audio_codecs = {}
-        for k, v in parsed_info["audio"].items():
+        for stream_index, stream in parsed_info["audio"].items():
             try:
-                if "truehd" in v["codec_name"].lower() or (
-                    ("dts" in v["profile"].lower()) and (
-                        "ma" in v["profile"].lower())):
-                    audio_codecs[k] = "flac"
+                # lets hope there aren't any ints in the stream info
+                stream = cast(Dict[str, str], stream)
+                if "truehd" in stream["codec_name"].lower() or (
+                    ("dts" in stream["profile"].lower()) and (
+                        "ma" in stream["profile"].lower())):
+                    audio_codecs[stream_index] = "flac"
                     continue
             except KeyError:
                 pass
-            if "aac" in v["codec_name"] or "flac" in v["codec_name"]:
-                audio_codecs[k] = "copy"
+            if "aac" in stream["codec_name"] or "flac" in stream["codec_name"]:
+                audio_codecs[stream_index] = "copy"
             else:
-                audio_codecs[k] = "libfdk_aac"
+                audio_codecs[stream_index] = "libfdk_aac"
         return audio_mapping, audio_codecs
 
-    def analyse_subtitles(self, parsed_info) -> (list, dict):
+    def analyse_subtitles(self, parsed_info: Dict[str, Dict[int, Dict[str, Union[str, int, Dict[str, Union[str, int]]]]]]) -> Tuple[List[int], Dict[int, str]]:
         subtitle_mapping = []
         if self.args.all_streams:
             subtitle_mapping = list(parsed_info["subtitle"].keys())
@@ -180,11 +196,11 @@ class VideoConverter():
             if len(parsed_info["subtitle"]) <= 1:
                 subtitle_mapping = list(parsed_info["subtitle"].keys())
             else:  # check for eng. if there are no eng streams, and one or more streams have no metadata, add all
-                for k, i in parsed_info["subtitle"].items():
+                for stream_index, stream in parsed_info["subtitle"].items():
                     try:
-                        for v in i["tags"].values():
-                            if "eng" in str(v):
-                                subtitle_mapping.append(int(k))
+                        for tag in cast(Dict[str, Union[str, int]], stream["tags"]).values():
+                            if "eng" in str(tag):
+                                subtitle_mapping.append(int(stream_index))
                                 break
                     except KeyError:
                         continue
@@ -194,33 +210,33 @@ class VideoConverter():
         subtitle_mapping = sorted(set(subtitle_mapping))
 
         subtitle_codecs = {}
-        for k, v in parsed_info["subtitle"].items():
-            if ("pgs" in v["codec_name"]) or ("dvd" in v["codec_name"]):
-                subtitle_codecs[k] = "copy"
+        for stream_index, stream in parsed_info["subtitle"].items():
+            if ("pgs" in stream["codec_name"]) or ("dvd" in stream["codec_name"]):
+                subtitle_codecs[stream_index] = "copy"
             else:
-                subtitle_codecs[k] = "ass"
+                subtitle_codecs[stream_index] = "ass"
         return subtitle_mapping, subtitle_codecs
 
-    def probe_video(self, filename: str) -> dict:
+    def probe_video(self, filename: str) -> Dict[str, Union[List[Dict[str, Union[str, int, Dict[str, Union[str, int]]]]], Dict[str, Union[str, int]]]]:
         return json.loads(
             subprocess.check_output(
                 ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
 
     def process(self, filename: str, outname: str):
-        parsed_info = {"video": {}, "audio": {}, "subtitle": {}}
+        parsed_info: Dict[str, Dict[int, Dict[str, Union[str, int, Dict[str, Union[str, int]]]]]] = {
+            "video": {}, "audio": {}, "subtitle": {}}
         file_info = self.probe_video(filename)
+        # print(file_info)
+        # return
         self.log(file_info)
-        streams: list = file_info["streams"]
+        # streams is always a list of dicts
+        streams = cast(
+            List[Dict[str, Union[str, int, Dict[str, Union[str, int]]]]], file_info["streams"])
 
         for stream in streams:
-            parsed_info[stream["codec_type"]][stream["index"]] = stream
-            continue
-            if "video" in stream["codec_type"]:
-                parsed_info["video"][stream["index"]] = stream
-            if "audio" in stream["codec_type"]:
-                parsed_info["audio"][stream["index"]] = stream
-            if "subtitle" in stream["codec_type"]:
-                parsed_info["subtitle"][stream["index"]] = stream
+            index: int = cast(int, stream["index"])
+            codec_type: str = cast(str, stream["codec_type"])
+            parsed_info[codec_type][index] = stream
 
         for k, v in copy.deepcopy(parsed_info)["video"].items():
             if "mjpeg" in v["codec_name"] or "png" in v["codec_name"]:
@@ -264,11 +280,12 @@ class VideoConverter():
 
     def main(self, directory: str):
         output_directory = self.prepare_directory(directory)
-        filelist: list = os.listdir(directory)
+        filelist = os.listdir(directory)
         self.log(filelist)
         filelist.sort(key=lambda s: s.casefold())
         self.log(filelist)
-        exempt_strings = [".txt", ".rar", ".nfo", ".sfv", ".jpg", ".png", ".gif", ".py", ".md"]
+        exempt_strings = [".txt", ".rar", ".nfo",
+                          ".sfv", ".jpg", ".png", ".gif", ".py", ".md"]
         exempt_strings.extend([f".r{x:02}" for x in range(100)])
         for filename in filelist:
             if os.path.isdir(filename):
@@ -302,15 +319,19 @@ if __name__ == "__main__":
         "--crop",
         type=str,
         help="Specify a crop filter. These are of the format 'crop=height:width:x:y'.")
-    parser.add_argument("-d", "--deinterlace", action="store_true", help="Force deinterlacing of video.")
-    parser.add_argument("-D", "--no-deinterlace", action="store_true", help="Disable deinterlacing of video.")
-    parser.add_argument("--force-reencode", action="store_true", help="Force a reencode, even if it is not needed.")
+    parser.add_argument("-d", "--deinterlace", action="store_true",
+                        help="Force deinterlacing of video.")
+    parser.add_argument("-D", "--no-deinterlace", action="store_true",
+                        help="Disable deinterlacing of video.")
+    parser.add_argument("--force-reencode", action="store_true",
+                        help="Force a reencode, even if it is not needed.")
     parser.add_argument(
         "-g",
         "--gpu",
         action="store_true",
         help="Uuse GPU accelerated encoding (nvenc). This produces h.265.")
-    parser.add_argument("--no-hwaccel", action="store_true", help="Disable hardware accelerated decoding.")
+    parser.add_argument("--no-hwaccel", action="store_true",
+                        help="Disable hardware accelerated decoding.")
     parser.add_argument("-s", "--simulate", action="store_true",
                         help="Do everything appart from run the ffmpeg command")
     parser.add_argument(
@@ -318,8 +339,10 @@ if __name__ == "__main__":
         "--tune",
         type=str,
         help="Specify libx264 tune. Options are: 'film animation grain stillimage psnr ssim fastdecode zerolatency'. Does not work with GPU mode.")
-    parser.add_argument("-v", "--verbose", action="store_true", help="Verbose mode.")
-    parser.add_argument("-V", "--Verbose", action="store_true", help="Verbose mode with a logfile.")
+    parser.add_argument("-v", "--verbose",
+                        action="store_true", help="Verbose mode.")
+    parser.add_argument("-V", "--Verbose", action="store_true",
+                        help="Verbose mode with a logfile.")
     args = parser.parse_args()
 
     vc = VideoConverter(args)
