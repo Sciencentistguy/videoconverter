@@ -7,6 +7,7 @@ import os
 import subprocess
 from typing import Any, List, Dict, Tuple, Union, cast
 
+ParsedInfoType = Dict[str, Dict[int, Dict[str, Union[str, int, Dict[str, Union[str, int]]]]]]
 
 class VideoConverter():
     def __init__(self, args: Namespace):
@@ -136,7 +137,7 @@ class VideoConverter():
         if not os.path.isdir(name):
             os.mkdir(name)
 
-    def analyse_video(self, parsed_info: Dict[str, Dict[int, Dict[str, Union[str, int, Dict[str, Union[str, int]]]]]]) -> Tuple[List[int], str]:
+    def analyse_video(self, parsed_info: ParsedInfoType) -> Tuple[List[int], str]:
         if len(parsed_info["video"]) > 1:
             raise ValueError(
                 "The file provided has more than one video stream")
@@ -149,7 +150,7 @@ class VideoConverter():
         video_mapping = [list(parsed_info["video"].keys())[0]]
         return video_mapping, video_codec
 
-    def analyse_audio(self, parsed_info: Dict[str, Dict[int, Dict[str, Union[str, int, Dict[str, Union[str, int]]]]]]) -> Tuple[List[int], Dict[int, str]]:
+    def analyse_audio(self, parsed_info: ParsedInfoType) -> Tuple[List[int], Dict[int, str]]:
         audio_mapping: List[int] = []
         if self.args.all_streams:
             audio_mapping = list(parsed_info["audio"].keys())
@@ -223,7 +224,7 @@ class VideoConverter():
                 ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
 
     def process(self, filename: str, outname: str):
-        parsed_info: Dict[str, Dict[int, Dict[str, Union[str, int, Dict[str, Union[str, int]]]]]] = {
+        parsed_info: ParsedInfoType = {
             "video": {}, "audio": {}, "subtitle": {}}
         file_info = self.probe_video(filename)
         # print(file_info)
@@ -241,7 +242,7 @@ class VideoConverter():
             parsed_info[codec_type][index] = stream
         del file_info
 
-        for k, v in copy.deepcopy(parsed_info)["video"].items():
+        for k, v in copy.deepcopy(parsed_info["video"]).items():
             if "mjpeg" in v["codec_name"] or "png" in v["codec_name"]:
                 parsed_info["video"].pop(k)
 
