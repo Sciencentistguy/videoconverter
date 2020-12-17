@@ -236,7 +236,10 @@ class VideoConverter():
         for stream in streams:
             index: int = cast(int, stream["index"])
             codec_type: str = cast(str, stream["codec_type"])
+            if codec_type == "data":
+                continue
             parsed_info[codec_type][index] = stream
+        del file_info
 
         for k, v in copy.deepcopy(parsed_info)["video"].items():
             if "mjpeg" in v["codec_name"] or "png" in v["codec_name"]:
