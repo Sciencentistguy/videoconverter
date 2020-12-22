@@ -9,6 +9,7 @@ from typing import Any, List, Dict, Tuple, Union, cast
 
 ParsedInfoType = Dict[str, Dict[int, Dict[str, Union[str, int, Dict[str, Union[str, int]]]]]]
 
+
 class VideoConverter():
     def __init__(self, args: Namespace):
         self.args = args
@@ -20,7 +21,7 @@ class VideoConverter():
         if self.tv_mode:
             title = input(
                 "Please enter the title of the TV Show: "
-                if not using else f"Please enter the title of the TV Show. Leave blank to use previous ({loaded[0]})")
+                if not using else f"Please enter the title of the TV Show. Leave blank to use previous ({loaded[0]}): ")
             if title == "":
                 title = loaded[0]
                 using = True
@@ -72,7 +73,14 @@ class VideoConverter():
         elif self.args.verbose:
             print(i)
 
-    def encode(self, filename: str, outname: str, video_codec: str, crf: int, deinterlace: bool, others: List[str] = []):
+    def encode(
+            self,
+            filename: str,
+            outname: str,
+            video_codec: str,
+            crf: int,
+            deinterlace: bool,
+            others: List[str] = []):
         self.log(filename)
         # others = [] if others is  else others
         filters = []
@@ -92,8 +100,8 @@ class VideoConverter():
         command += ["-tune",
                     self.args.tune] if (self.args.tune is not None) else []
 
-        command += ["-profile:v", "high", "-rc-lookahead", "250", "-preset",
-                    "slow"] if (video_codec == "libx264") else []  # Libx264 options
+        command += ["-profile:v", "high", "-rc-lookahead", "250", "-preset", "slow",
+                    "-x264opts", "opencl"] if (video_codec == "libx264") else []  # Libx264 options
         command += ["-rc",
                     "constqp",
                     "-qp",
@@ -189,7 +197,7 @@ class VideoConverter():
                 audio_codecs[stream_index] = "libfdk_aac"
         return audio_mapping, audio_codecs
 
-    def analyse_subtitles(self, parsed_info: Dict[str, Dict[int, Dict[str, Union[str, int, Dict[str, Union[str, int]]]]]]) -> Tuple[List[int], Dict[int, str]]:
+    def analyse_subtitles(self, parsed_info: ParsedInfoType) -> Tuple[List[int], Dict[int, str]]:
         subtitle_mapping = []
         if self.args.all_streams:
             subtitle_mapping = list(parsed_info["subtitle"].keys())
@@ -218,7 +226,9 @@ class VideoConverter():
                 subtitle_codecs[stream_index] = "ass"
         return subtitle_mapping, subtitle_codecs
 
-    def probe_video(self, filename: str) -> Dict[str, Union[List[Dict[str, Union[str, int, Dict[str, Union[str, int]]]]], Dict[str, Union[str, int]]]]:
+    def probe_video(self, filename: str) -> Dict[str,
+                                                 Union[List[Dict[str, Union[str, int, Dict[str, Union[str, int]]]]],
+                                                       Dict[str, Union[str, int]]]]:
         return json.loads(
             subprocess.check_output(
                 ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", filename]))
