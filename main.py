@@ -298,15 +298,24 @@ class VideoConverter():
         self.log(filelist)
         filelist.sort(key=lambda s: s.casefold())
         self.log(filelist)
-        exempt_strings = [".txt", ".rar", ".nfo",
-                          ".sfv", ".jpg", ".png", ".gif", ".py", ".md"]
-        exempt_strings.extend([f".r{x:02}" for x in range(100)])
+        exempt_file_extensions = [".gif",
+                                  ".jpg",
+                                  ".md",
+                                  ".nfo",
+                                  ".png",
+                                  ".py",
+                                  ".rar",
+                                  ".sfv",
+                                  ".srr",
+                                  ".txt"
+                                  ]
+        exempt_file_extensions.extend([f".r{x:02}" for x in range(100)])
         for filename in filelist:
             if os.path.isdir(filename):
                 continue
             if "." not in filename:
                 continue
-            if any(ext in filename for ext in exempt_strings):
+            if any(ext in filename for ext in exempt_file_extensions):
                 continue
             if os.path.isdir("./" + filename):
                 continue
