@@ -57,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let parsed = parse_stream_metadata(&file);
         let mappings = get_mappings(&parsed);
         let codecs = get_codecs(&parsed, &mappings);
-        print_codec_mapping(&parsed, &codecs);
+        print_codec_mapping(&parsed, &mappings, &codecs);
     }
 
     return Ok(());
@@ -361,8 +361,9 @@ fn get_codecs(parsed: &Vec<StreamType>, mappings: &Vec<usize>) -> HashMap<usize,
         .collect();
 }
 
-fn print_codec_mapping(parsed: &Vec<StreamType>, codecs: &HashMap<usize, Option<codec::Id>>) {
-    for (index, codec) in codecs.iter() {
+fn print_codec_mapping(parsed: &Vec<StreamType>, mappings: &Vec<usize>, codecs: &HashMap<usize, Option<codec::Id>>) {
+    for index in mappings {
+        let codec = codecs.get(&index).unwrap();
         let oldcodec = match &parsed[*index] {
             StreamType::Video(video) => video.codec,
             StreamType::Audio(audio) => audio.codec,
