@@ -9,4 +9,7 @@ edition = "2018"
 [dependencies]
 clap = "2.33.3"
 ffmpeg-next = "4.3.8"
+itertools = "0.10.0"
+lazy_static = "1.4.0"
+regex = "1.4.2"
 structopt = "0.3"

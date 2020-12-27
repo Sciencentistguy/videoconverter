@@ -1,13 +1,24 @@
 extern crate ffmpeg_next as ffmpeg;
+extern crate regex;
+
+#[macro_use]
+extern crate lazy_static;
+//extern crate ffmpeg_sys_next as ffmpeg_sys;
 use clap::arg_enum;
 use ffmpeg::codec::{self, Context, Parameters};
 use ffmpeg::format::context::Input;
 use ffmpeg::media::Type;
+use itertools::sorted;
+use regex::Regex;
 use std::collections::HashMap;
+use std::process;
 use structopt::StructOpt;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
+    lazy_static! {
+        static ref EXEMPT_EXTENSION_REGEX: Regex = Regex::new(r"r\d+").unwrap();
+    }
 
     let opt = Opt::from_args();
 
@@ -18,12 +29,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL);
     }
 
-    let file = ffmpeg::format::input(&"/home/jamie/Videos/Inception/Inception_t16.mkv")?;
+    let entries = sorted(
+        std::fs::read_dir(&opt.path)?
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| !path.is_dir())
+            .filter(|path| {
+                let filename = path.file_name().and_then(|x| x.to_str()).unwrap();
+                filename.chars().nth(0).unwrap() != '.'
+            })
+            .filter(|path| {
+                let file_extension = match path.extension().and_then(|x| x.to_str()) {
+                    Some(x) => x,
+                    None => {
+                        return false;
+                    }
+                };
+                let exempt_file_extensions = ["gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt"];
+                return !(exempt_file_extensions.contains(&file_extension) || EXEMPT_EXTENSION_REGEX.is_match(file_extension));
+            }),
+    );
 
-    let parsed = parse_stream_metadata(&file);
-    let mappings = get_mappings(&parsed);
-    let codecs = get_codecs(&parsed, &mappings);
-    print_codec_mapping(&parsed, &codecs);
+    for path in entries {
+        println!("{:#?}", path);
+
+        let file = ffmpeg::format::input(&path)?;
+
+        let parsed = parse_stream_metadata(&file);
+        let mappings = get_mappings(&parsed);
+        let codecs = get_codecs(&parsed, &mappings);
+        print_codec_mapping(&parsed, &codecs);
+    }
 
     return Ok(());
 }
