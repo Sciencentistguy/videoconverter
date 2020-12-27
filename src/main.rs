@@ -1,38 +1,101 @@
 extern crate ffmpeg_next as ffmpeg;
-//extern crate ffmpeg_sys_next as ffmpeg_sys;
+use clap::arg_enum;
 use ffmpeg::codec::{self, Context, Parameters};
 use ffmpeg::format::context::Input;
 use ffmpeg::media::Type;
 use std::collections::HashMap;
-use std::process;
+use structopt::StructOpt;
 
-fn main() {
-    match ffmpeg::init() {
-        Err(x) => {
-            eprintln!("Error: Could not initialise ffmpeg ({})", x);
-            process::exit(1);
-        }
-        Ok(_) => {}
-    }
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ffmpeg::init()?;
+
+    let opt = Opt::from_args();
+
+    println!("{:?}", opt);
 
     // Squelch libav* errors
     unsafe {
         ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL);
     }
 
-    let file = match ffmpeg::format::input(&"/home/jamie/Videos/Inception/Inception_t16.mkv") {
-        Err(x) => {
-            eprintln!("Error: {}", x);
-            process::exit(1);
-        }
-        Ok(x) => x,
-    };
+    let file = ffmpeg::format::input(&"/home/jamie/Videos/Inception/Inception_t16.mkv")?;
 
     let parsed = parse_stream_metadata(&file);
     let mappings = get_mappings(&parsed);
     let codecs = get_codecs(&parsed, &mappings);
-
     print_codec_mapping(&parsed, &codecs);
+
+    return Ok(());
+}
+
+#[derive(StructOpt, Debug)]
+#[structopt(name = "VideoConverter")]
+struct Opt {
+    /// Keep all streams, regardless of language metadata. [Not Yet Implemented]
+    #[structopt(short, long)]
+    all_streams: bool,
+
+    /// Specify a CRF value to be passed to libx264 [Not Yet Implemented]
+    #[structopt(long, default_value = "20")]
+    crf: u8,
+
+    /// Specify a crop filter. These are of the format 'crop=height:width:x:y' [Not Yet Implemented]
+    #[structopt(long)]
+    crop: Option<String>,
+
+    /// Force deinterlacing of video [Not Yet Implemented]
+    #[structopt(short, long)]
+    deinterlace: bool,
+
+    /// Disable automatic deinterlacing of video [Not Yet Implemented]
+    #[structopt(short = "-D", long)]
+    no_deinterlace: bool,
+
+    /// Force reencoding of video [Not Yet Implemented]
+    #[structopt(long)]
+    force_reencode: bool,
+
+    /// Use GPU accelerated encoding (nvenc). This produces HEVC. Requires an Nvidia 10-series gpu
+    /// or later [Not Yet Implemented]
+    #[structopt(short, long)]
+    gpu: bool,
+
+    /// Disable hardware-accelerated decoding [Not Yet Implemented]
+    #[structopt(long)]
+    no_hwaccel: bool,
+
+    /// Do not actually perform the conversion [Not Yet Implemented]
+    #[structopt(short, long)]
+    simulate: bool,
+
+    /// Specify libx264 tune. Incompatible with --gpu [Not Yet Implemented]
+    #[structopt(short, long, possible_values = &Libx264Tune::variants(), case_insensitive=true)]
+    tune: Option<Libx264Tune>,
+
+    #[structopt(short, long)]
+    verbose: bool,
+
+    /// Write output to a log file [Not Yet Implemented]
+    #[structopt(long)]
+    log: bool,
+
+    /// The path to operate on
+    #[structopt(default_value = ".")]
+    path: std::path::PathBuf,
+}
+
+arg_enum! {
+    #[derive(Debug)]
+    enum Libx264Tune {
+        Film,
+        Animation,
+        Grain,
+        Stillimage,
+        Psnr,
+        Ssim,
+        Fastdecode,
+        Zerolatency,
+    }
 }
 
 #[derive(Debug)]
@@ -43,15 +106,38 @@ enum StreamType {
 }
 
 #[derive(Debug)]
+enum FieldOrder {
+    Progressive,
+    Unknown,
+    Interlaced,
+}
+
+#[derive(Debug)]
 struct Video {
     index: usize,
     codec: codec::Id,
+    field_order: FieldOrder,
 }
 
 impl Video {
-    pub fn new(index: usize, codec_par: Parameters) -> Video {
+    pub fn new(index: usize, codec_context: Context, codec_par: Parameters) -> Video {
         let codec = codec_par.id();
-        Video { index, codec }
+
+        let decoder = codec_context.decoder().video();
+        let field_order = match unsafe { decoder.map(|x| (*x.as_ptr()).field_order) } {
+            Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_PROGRESSIVE) => FieldOrder::Progressive,
+            Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_TT) => FieldOrder::Interlaced,
+            Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_TB) => FieldOrder::Interlaced,
+            Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_BT) => FieldOrder::Interlaced,
+            Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_BB) => FieldOrder::Interlaced,
+            Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_UNKNOWN) => FieldOrder::Unknown,
+            Err(x) => {
+                eprintln!("Error getting field order for stream {}: {:?}", index, x);
+                FieldOrder::Unknown
+            }
+        };
+
+        Video { index, codec, field_order }
     }
 }
 
@@ -98,16 +184,16 @@ fn parse_stream_metadata(file: &Input) -> Vec<StreamType> {
     let mut out: Vec<StreamType> = Vec::new();
     for stream in file.streams() {
         let index = stream.index();
-        let codec = stream.codec();
+        let codec_context = stream.codec();
         let codec_parameters = stream.parameters();
         let tags = stream.metadata();
         //let explode = codec.codec().unwrap();
-        match codec.medium() {
+        match codec_context.medium() {
             Type::Video => {
-                out.push(StreamType::Video(Video::new(index, codec_parameters)));
+                out.push(StreamType::Video(Video::new(index, codec_context, codec_parameters)));
             }
             Type::Audio => {
-                out.push(StreamType::Audio(Audio::new(index, codec, codec_parameters, tags)));
+                out.push(StreamType::Audio(Audio::new(index, codec_context, codec_parameters, tags)));
             }
             Type::Subtitle => {
                 out.push(StreamType::Subtitle(Subtitle::new(index, codec_parameters, tags)));
@@ -147,7 +233,8 @@ fn get_mappings(parsed: &Vec<StreamType>) -> Vec<usize> {
         process::exit(1);
     }
 
-    if audio_mappings.len() == 0 { // if no english streams are detected, just use all streams
+    if audio_mappings.len() == 0 {
+        // if no english streams are detected, just use all streams
         for stream in parsed.iter() {
             match stream {
                 StreamType::Audio(audio) => {
@@ -158,7 +245,8 @@ fn get_mappings(parsed: &Vec<StreamType>) -> Vec<usize> {
         }
     }
 
-    if subtitle_mappings.len() == 0 { // if no english streams are detected, just use all streams
+    if subtitle_mappings.len() == 0 {
+        // if no english streams are detected, just use all streams
         for stream in parsed.iter() {
             match stream {
                 StreamType::Subtitle(subtitle) => {
