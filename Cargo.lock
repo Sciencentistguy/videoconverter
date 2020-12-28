@@ -305,6 +305,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fdf1b9db47230893d76faad238fd6097fd6d6a9245cd7a4d90dbd639536bbd2"
 
 [[package]]
+name = "simple-error"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "634bf7bc1315698154cb1b45c1db17fcd2e5ce41f925b7b4063e971536714bf1"
+
+[[package]]
 name = "strsim"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -408,6 +414,7 @@ dependencies = [
  "itertools",
  "lazy_static",
  "regex",
+ "simple-error",
  "structopt",
 ]
 

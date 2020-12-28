@@ -10,7 +10,9 @@ use ffmpeg::format::context::Input;
 use ffmpeg::media::Type;
 use itertools::sorted;
 use regex::Regex;
+use simple_error::SimpleError;
 use std::collections::HashMap;
+use std::path::Path;
 use std::process;
 use structopt::StructOpt;
 
@@ -49,13 +51,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
     );
 
+    if !opt.simulate {
+        prepare_directory(opt.path)?;
+    }
+
     for path in entries {
         println!("{:#?}", path);
+
+        let input_filename = path.file_name().expect("Input filename is None").to_string_lossy();
+        let input_ext = path.extension().expect("Input ext is None").to_string_lossy();
+        let output_filename = input_filename.replace(input_ext.as_ref(), "mkv");
 
         let file = ffmpeg::format::input(&path)?;
 
         let parsed = parse_stream_metadata(&file);
-        let mappings = get_mappings(&parsed);
+        let mappings = get_mappings(&parsed)?;
         let codecs = get_codecs(&parsed, &mappings);
         print_codec_mapping(&parsed, &mappings, &codecs);
     }
@@ -239,12 +249,12 @@ fn parse_stream_metadata(file: &Input) -> Vec<StreamType> {
     return out;
 }
 
-fn get_mappings(parsed: &Vec<StreamType>) -> Vec<usize> {
+fn get_mappings(parsed: &Vec<StreamType>) -> Result<Vec<usize>, SimpleError> {
     let mut video_mappings: Vec<usize> = Vec::new();
     let mut audio_mappings: Vec<usize> = Vec::new();
     let mut subtitle_mappings: Vec<usize> = Vec::new();
 
-    for stream in parsed.iter() {
+    for stream in parsed {
         match stream {
             StreamType::Video(video) => {
                 video_mappings.push(video.index);
@@ -264,13 +274,12 @@ fn get_mappings(parsed: &Vec<StreamType>) -> Vec<usize> {
 
     if video_mappings.len() != 1 {
         let num_vids = video_mappings.len();
-        eprintln!("Erorr: File has {} video streams", num_vids);
-        process::exit(1);
+        return Err(SimpleError::new(format!("File has {} video streams", num_vids)));
     }
 
     if audio_mappings.len() == 0 {
         // if no english streams are detected, just use all streams
-        for stream in parsed.iter() {
+        for stream in parsed {
             match stream {
                 StreamType::Audio(audio) => {
                     audio_mappings.push(audio.index);
@@ -292,10 +301,11 @@ fn get_mappings(parsed: &Vec<StreamType>) -> Vec<usize> {
         }
     }
 
-    return video_mappings
+    Ok(video_mappings
         .into_iter()
-        .chain(audio_mappings.into_iter().chain(subtitle_mappings.into_iter()))
-        .collect();
+        .chain(audio_mappings.into_iter())
+        .chain(subtitle_mappings.into_iter())
+        .collect())
 }
 
 fn get_codecs(parsed: &Vec<StreamType>, mappings: &Vec<usize>) -> HashMap<usize, Option<codec::Id>> {
@@ -305,8 +315,7 @@ fn get_codecs(parsed: &Vec<StreamType>, mappings: &Vec<usize>) -> HashMap<usize,
 
     for index in mappings {
         let index = *index;
-        let stream = &parsed[index];
-        match stream {
+        match &parsed[index] {
             StreamType::Video(video) => match video.codec {
                 codec::Id::HEVC => {
                     video_codecs.insert(index, None);
@@ -357,7 +366,8 @@ fn get_codecs(parsed: &Vec<StreamType>, mappings: &Vec<usize>) -> HashMap<usize,
 
     return video_codecs
         .into_iter()
-        .chain(audio_codecs.into_iter().chain(subtitle_codecs.into_iter()))
+        .chain(audio_codecs.into_iter())
+        .chain(subtitle_codecs.into_iter())
         .collect();
 }
 
@@ -365,13 +375,13 @@ fn print_codec_mapping(parsed: &Vec<StreamType>, mappings: &Vec<usize>, codecs: 
     for index in mappings {
         let codec = codecs.get(&index).unwrap();
         let oldcodec = match &parsed[*index] {
-            StreamType::Video(video) => video.codec,
-            StreamType::Audio(audio) => audio.codec,
-            StreamType::Subtitle(subtitle) => subtitle.codec,
+            StreamType::Video(video) => &video.codec,
+            StreamType::Audio(audio) => &audio.codec,
+            StreamType::Subtitle(subtitle) => &subtitle.codec,
         };
         let newcodec = match codec {
-            None => oldcodec,
-            Some(x) => *x,
+            None => &oldcodec,
+            Some(x) => x,
         };
         print!("stream {}: {:?} -> {:?}", index, oldcodec, newcodec);
         if codec.is_none() {
@@ -380,4 +390,12 @@ fn print_codec_mapping(parsed: &Vec<StreamType>, mappings: &Vec<usize>, codecs: 
             println!("");
         }
     }
+}
+
+fn prepare_directory<P: AsRef<Path>>(path: P) -> Result<(), std::io::Error> {
+    let dir_to_make = path.as_ref().join("newfiles");
+    if dir_to_make.is_dir() {
+        return Ok(());
+    }
+    std::fs::create_dir(dir_to_make)
 }
