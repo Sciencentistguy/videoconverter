@@ -249,7 +249,7 @@ fn parse_stream_metadata(file: &Input) -> Vec<StreamType> {
     return out;
 }
 
-fn get_mappings(parsed: &Vec<StreamType>) -> Result<Vec<usize>, SimpleError> {
+fn get_mappings(parsed: &[StreamType]) -> Result<Vec<usize>, SimpleError> {
     let mut video_mappings: Vec<usize> = Vec::new();
     let mut audio_mappings: Vec<usize> = Vec::new();
     let mut subtitle_mappings: Vec<usize> = Vec::new();
@@ -308,70 +308,34 @@ fn get_mappings(parsed: &Vec<StreamType>) -> Result<Vec<usize>, SimpleError> {
         .collect())
 }
 
-fn get_codecs(parsed: &Vec<StreamType>, mappings: &Vec<usize>) -> HashMap<usize, Option<codec::Id>> {
-    let mut video_codecs: HashMap<usize, Option<codec::Id>> = HashMap::new();
-    let mut audio_codecs: HashMap<usize, Option<codec::Id>> = HashMap::new();
-    let mut subtitle_codecs: HashMap<usize, Option<codec::Id>> = HashMap::new();
-
-    for index in mappings {
-        let index = *index;
-        match &parsed[index] {
+fn get_codecs(parsed: &[StreamType], mappings: &[usize]) -> HashMap<usize, Option<codec::Id>> {
+    use codec::Id::{AAC, DTS, DVD_SUBTITLE, FLAC, H264, HDMV_PGS_SUBTITLE, HEVC, SSA, TRUEHD};
+    mappings
+        .iter()
+        .map(|&index| match &parsed[index] {
             StreamType::Video(video) => match video.codec {
-                codec::Id::HEVC => {
-                    video_codecs.insert(index, None);
-                }
-                codec::Id::H264 => {
-                    video_codecs.insert(index, None);
-                }
-                _ => {
-                    video_codecs.insert(index, Some(codec::Id::H264));
-                }
+                HEVC | H264 => (index, None),
+                _ => (index, Some(H264)),
             },
             StreamType::Audio(audio) => match audio.codec {
-                codec::Id::FLAC => {
-                    audio_codecs.insert(index, None);
-                }
-                codec::Id::AAC => {
-                    audio_codecs.insert(index, None);
-                }
+                FLAC | AAC => (index, None),
 
-                codec::Id::TRUEHD => {
-                    audio_codecs.insert(index, Some(codec::Id::FLAC));
-                }
-                codec::Id::DTS => match audio.profile {
-                    Some(codec::Profile::DTS(codec::profile::DTS::HD_MA)) => {
-                        audio_codecs.insert(index, Some(codec::Id::FLAC));
-                    }
-                    _ => {
-                        audio_codecs.insert(index, Some(codec::Id::AAC));
-                    }
+                TRUEHD => (index, Some(FLAC)),
+                DTS => match audio.profile {
+                    Some(codec::Profile::DTS(codec::profile::DTS::HD_MA)) => (index, Some(FLAC)),
+                    _ => (index, Some(AAC)),
                 },
-                _ => {
-                    audio_codecs.insert(index, Some(codec::Id::AAC));
-                }
+                _ => (index, Some(AAC)),
             },
             StreamType::Subtitle(subtitle) => match subtitle.codec {
-                codec::Id::HDMV_PGS_SUBTITLE => {
-                    subtitle_codecs.insert(index, None);
-                }
-                codec::Id::DVD_SUBTITLE => {
-                    subtitle_codecs.insert(index, None);
-                }
-                _ => {
-                    subtitle_codecs.insert(index, Some(codec::Id::SSA));
-                }
+                HDMV_PGS_SUBTITLE | DVD_SUBTITLE => (index, None),
+                _ => (index, Some(SSA)),
             },
-        }
-    }
-
-    return video_codecs
-        .into_iter()
-        .chain(audio_codecs.into_iter())
-        .chain(subtitle_codecs.into_iter())
-        .collect();
+        })
+        .collect()
 }
 
-fn print_codec_mapping(parsed: &Vec<StreamType>, mappings: &Vec<usize>, codecs: &HashMap<usize, Option<codec::Id>>) {
+fn print_codec_mapping(parsed: &[StreamType], mappings: &[usize], codecs: &HashMap<usize, Option<codec::Id>>) {
     for index in mappings {
         let codec = codecs.get(&index).unwrap();
         let oldcodec = match &parsed[*index] {
