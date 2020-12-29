@@ -1,7 +1,8 @@
 use crate::util;
 
 use clap::arg_enum;
-use structopt::StructOpt;
+pub use structopt::StructOpt;
+
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting(clap::AppSettings::ColoredHelp))]
@@ -74,25 +75,32 @@ arg_enum! {
     }
 }
 
-pub fn get_tv_options() -> std::io::Result<(bool, Option<String>, Option<usize>, Option<usize>)> {
-    let tv_mode = util::confirm("TV Show Mode", false)?;
+pub struct TVOptions {
+    pub enabled: bool,
+    pub title: Option<String>,
+    pub season: Option<usize>,
+    pub episode: Option<usize>,
+}
+
+pub fn get_tv_options() -> std::io::Result<TVOptions> {
+    let enabled = util::confirm("TV Show Mode", false)?;
 
     //let using = false; // for NYI save state feature
 
-    let tv_show_title = if tv_mode {
+    let title = if enabled {
         Some(util::prompt("Please enter the title of the TV show")?)
     } else {
         None
     };
 
-    let mut tv_show_season = None;
-    let mut tv_show_episode = None;
+    let mut season = None;
+    let mut episode = None;
 
-    if tv_mode {
+    if enabled {
         loop {
             match util::prompt("Enter the season of the tv show")?.parse::<usize>() {
                 Ok(x) => {
-                    tv_show_season = Some(x);
+                    season = Some(x);
                     break;
                 }
                 Err(_) => {}
@@ -102,7 +110,7 @@ pub fn get_tv_options() -> std::io::Result<(bool, Option<String>, Option<usize>,
         loop {
             match util::prompt("Enter the episode of the tv show")?.parse::<usize>() {
                 Ok(x) => {
-                    tv_show_episode = Some(x);
+                    episode = Some(x);
                     break;
                 }
                 Err(_) => {}
@@ -110,5 +118,5 @@ pub fn get_tv_options() -> std::io::Result<(bool, Option<String>, Option<usize>,
         }
     }
 
-    return Ok((tv_mode, tv_show_title, tv_show_season, tv_show_episode));
+    return Ok(TVOptions {enabled, title, season, episode});
 }

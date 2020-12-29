@@ -6,7 +6,6 @@ pub fn prompt(prompt: &str) -> std::io::Result<String> {
 
     stdout().lock().flush()?;
     stdin().read_line(&mut buf)?;
-    buf.make_ascii_lowercase();
     buf.truncate(buf.trim_end().len());
     return Ok(buf);
 }
