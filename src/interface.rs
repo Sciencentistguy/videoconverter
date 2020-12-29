@@ -5,7 +5,7 @@ pub use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting(clap::AppSettings::ColoredHelp))]
-#[structopt(name = "VideoConverter")]
+#[structopt(name = "videoconverter")]
 pub struct Opt {
     /// Keep all streams, regardless of language metadata.
     #[structopt(short, long)]
