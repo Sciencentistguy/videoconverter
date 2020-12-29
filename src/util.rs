@@ -41,8 +41,8 @@ pub fn write_state(tv_options: &TVOptions) -> std::io::Result<()> {
         &mut file,
         "{}\n{}\n{}",
         tv_options.title.as_ref().unwrap(),
-        tv_options.season.as_ref().unwrap(),
-        tv_options.episode.as_ref().unwrap()
+        tv_options.season.unwrap(),
+        tv_options.episode.unwrap()
     )
 }
 

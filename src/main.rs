@@ -124,7 +124,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         log_mappings(&stream_mappings, &codec_mappings);
 
-        let mut command = backend::generate_ffmpeg_command(input_path, output_path, &stream_mappings, &codec_mappings, &args)?;
+        let mut command = backend::generate_ffmpeg_command(&input_path, &output_path, &stream_mappings, &codec_mappings, &args)?;
 
         info!("{:?}", command);
         if !args.simulate {
