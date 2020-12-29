@@ -35,6 +35,7 @@ fn get_encoder(codec: codec::Id) -> Result<&'static str, SimpleError> {
         Id::AAC => Ok("libfdk_aac"),
         Id::FLAC => Ok("flac"),
         Id::H264 => Ok("libx264"),
+        Id::HEVC => Ok("hevc_nvenc"),
         _ => {
             error!("Invalid codec '{:?}' passed to get_encoder.", codec);
             return Err(SimpleError::new("Invalid codec passed to get_encoder"));
@@ -58,7 +59,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     }
     .unwrap();
 
-    let reencoding_video = codecs.get(&0usize).unwrap().is_some();
+    let reencoding_video = codecs.get(&0usize).unwrap().is_some() || args.force_reencode;
     let reencoding_audio = itertools::any(mappings.audio.iter().map(|x| x.index()), |x| codecs.get(&x).unwrap().is_some());
 
     command.arg("-hide_banner");
@@ -89,15 +90,23 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
 
     if reencoding_video {
         trace!("Reencoding video");
-        command.args(&["-profile:v", "high", "-rc-lookahead", "250", "-preset", "slow"]);
-        if !args.no_hwaccel {
-            command.args(&["-x264opts", "opencl"]);
-        }
+        if args.gpu {
+            command.args(&["-rc", "constqp", "-qp"]);
+            command.arg(args.crf.to_string());
+            command.args(&["-preset", "slow", "-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"]);
+        } else {
+            command.arg("-crf");
+            command.arg(args.crf.to_string());
+            command.args(&["-profile:v", "high", "-rc-lookahead", "250", "-preset", "slow"]);
+            if !args.no_hwaccel {
+                command.args(&["-x264opts", "opencl"]);
+            }
 
-        if let Some(x) = args.tune.as_ref() {
-            let s = x.to_string().to_lowercase();
-            command.arg("-tune");
-            command.arg(s);
+            if let Some(x) = args.tune.as_ref() {
+                let s = x.to_string().to_lowercase();
+                command.arg("-tune");
+                command.arg(s);
+            }
         }
 
         let deinterlace = !args.no_deinterlace
@@ -121,7 +130,11 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
 
         if deinterlace {
             trace!("Deinterlacing video");
-            command.arg("yadif");
+            if args.gpu {
+                command.args(&["hwupload_cuda", "yadif_cuda"]);
+            } else {
+                command.arg("yadif");
+            }
         }
     }
 

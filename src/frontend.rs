@@ -201,17 +201,17 @@ pub fn get_stream_mappings(parsed: &[Stream]) -> StreamMappings {
     StreamMappings { video, audio, subtitle }
 }
 
-pub fn get_codec_mapping(mappings: &StreamMappings) -> HashMap<usize, Option<codec::Id>> {
+pub fn get_codec_mapping(stream_mappings: &StreamMappings, args: &crate::interface::Opt) -> HashMap<usize, Option<codec::Id>> {
     use codec::Id::{AAC, DTS, DVD_SUBTITLE, FLAC, H264, HDMV_PGS_SUBTITLE, HEVC, SSA, TRUEHD};
 
-    mappings
+    stream_mappings
         .iter()
         .map(|stream| {
             let index = stream.index();
             match stream {
                 Stream::Video(video) => match video.codec {
                     HEVC | H264 => (index, None),
-                    _ => (index, Some(H264)),
+                    _ => (index, Some(if args.gpu { HEVC } else { H264 })),
                 },
                 Stream::Audio(audio) => match audio.codec {
                     FLAC | AAC => (index, None),

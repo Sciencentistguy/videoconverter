@@ -1,8 +1,6 @@
-extern crate ffmpeg_next as ffmpeg;
-extern crate regex;
-
 #[macro_use]
 extern crate lazy_static;
+extern crate ffmpeg_next as ffmpeg;
 
 mod backend;
 mod frontend;
@@ -11,8 +9,9 @@ mod util;
 
 use ffmpeg::codec;
 use frontend::StreamMappings;
+use interface::Opt;
 use itertools::sorted;
-use log::{debug, info};
+use log::{debug, error, info};
 use regex::Regex;
 use std::collections::HashMap;
 use structopt::StructOpt;
@@ -26,6 +25,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let args = interface::Opt::from_args();
+
+    validate_args(&args);
 
     debug!("{:?}", args);
 
@@ -109,11 +110,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let file = ffmpeg::format::input(&input_path)?;
 
         let parsed = frontend::parse_stream_metadata(&file);
-        let mappings = frontend::get_stream_mappings(&parsed);
-        let codecs = frontend::get_codec_mapping(&mappings);
-        log_codec_mapping(&mappings, &codecs);
+        let stream_mappings = frontend::get_stream_mappings(&parsed);
+        let codec_mappings = frontend::get_codec_mapping(&stream_mappings, &args);
 
-        let mut command = backend::generate_ffmpeg_command(input_path, output_path, &mappings, &codecs, &args)?;
+        log_mappings(&stream_mappings, &codec_mappings);
+
+        let mut command = backend::generate_ffmpeg_command(input_path, output_path, &stream_mappings, &codec_mappings, &args)?;
 
         info!("{:?}", command);
         if !args.simulate {
@@ -124,7 +126,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     return Ok(());
 }
 
-fn log_codec_mapping(mappings: &StreamMappings, codecs: &HashMap<usize, Option<codec::Id>>) {
+fn log_mappings(mappings: &StreamMappings, codecs: &HashMap<usize, Option<codec::Id>>) {
     for stream in mappings.iter() {
         let index = stream.index();
         let codec = codecs.get(&index).unwrap();
@@ -140,5 +142,20 @@ fn log_codec_mapping(mappings: &StreamMappings, codecs: &HashMap<usize, Option<c
             newcodec,
             if codec.is_none() { " (copy)" } else { "" }
         );
+    }
+}
+
+fn validate_args(args: &Opt) {
+    if args.gpu && args.no_hwaccel {
+        error!("The arguments gpu and no_hwaccel are incompatible");
+        panic!();
+    }
+    if args.gpu && args.tune.is_some() {
+        error!("The arguments gpu and tune are incompatible");
+        panic!();
+    }
+    if args.force_deinterlace && args.no_deinterlace {
+        error!("The arguments force_deinterlace and no_deinterlace are incompatible");
+        panic!();
     }
 }
