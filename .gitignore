@@ -2,3 +2,8 @@ __pycache__*
 test*
 .idea
 .vscode
+
+
+# Added by cargo
+
+/target
