@@ -3,12 +3,16 @@ extern crate regex;
 
 #[macro_use]
 extern crate lazy_static;
-//extern crate ffmpeg_sys_next as ffmpeg_sys;
-use clap::arg_enum;
+
+mod interface;
+mod util;
+
+//use clap::AppSettings::ColoredHelp;
 use ffmpeg::codec::{self, Context, Parameters};
 use ffmpeg::format::context::Input;
 use ffmpeg::media::Type;
 use itertools::sorted;
+use log::{debug, error, info};
 use regex::Regex;
 use simple_error::SimpleError;
 use std::collections::HashMap;
@@ -18,18 +22,27 @@ use structopt::StructOpt;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
+    pretty_env_logger::init();
+
     lazy_static! {
         static ref EXEMPT_EXTENSION_REGEX: Regex = Regex::new(r"r\d+").unwrap();
     }
 
-    let opt = Opt::from_args();
+    let opt = interface::Opt::from_args();
 
-    println!("{:?}", opt);
+    debug!("{:?}", opt);
 
     // Squelch libav* errors
     unsafe {
         ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL);
     }
+
+    let (tv_mode, tv_show_title, tv_show_season, tv_show_episode) = interface::get_tv_options()?;
+
+    debug!(
+        "tv_mode: {}, tv_show_title: {:?}, tv_show_season: {:?}, tv_show_episode: {:?}.",
+        tv_mode, tv_show_title, tv_show_season, tv_show_episode
+    );
 
     let entries = sorted(
         std::fs::read_dir(&opt.path)?
@@ -51,12 +64,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }),
     );
 
-    if !opt.simulate {
-        prepare_directory(opt.path)?;
+    // prepare directory
+    {
+        let dir_to_make = if tv_mode {
+            opt.path.join(format!("Season {:02}", tv_show_season.unwrap()))
+        } else {
+            opt.path.join("newfiles")
+        };
+        let dir_as_str: &str = dir_to_make.as_os_str().to_str().expect("Path contained invalid unicode.");
+
+        if dir_to_make.is_dir() {
+            info!("Directory '{}' already exists.", dir_as_str);
+        } else {
+            if opt.simulate {
+                info!("Simulate mode: not creating directory '{}'", dir_as_str);
+            } else {
+                std::fs::create_dir(&dir_to_make)?;
+                info!("Created directory '{}'.", dir_as_str);
+            }
+        }
     }
 
     for path in entries {
-        println!("{:#?}", path);
+        println!("Current file: '{}'", path.as_os_str().to_str().expect("Path contained invalid unicode."));
 
         let input_filename = path.file_name().expect("Input filename is None").to_string_lossy();
         let input_ext = path.extension().expect("Input ext is None").to_string_lossy();
@@ -71,76 +101,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     return Ok(());
-}
-
-#[derive(StructOpt, Debug)]
-#[structopt(name = "VideoConverter")]
-struct Opt {
-    /// Keep all streams, regardless of language metadata. [Not Yet Implemented]
-    #[structopt(short, long)]
-    all_streams: bool,
-
-    /// Specify a CRF value to be passed to libx264 [Not Yet Implemented]
-    #[structopt(long, default_value = "20")]
-    crf: u8,
-
-    /// Specify a crop filter. These are of the format 'crop=height:width:x:y' [Not Yet Implemented]
-    #[structopt(long)]
-    crop: Option<String>,
-
-    /// Force deinterlacing of video [Not Yet Implemented]
-    #[structopt(short, long)]
-    deinterlace: bool,
-
-    /// Disable automatic deinterlacing of video [Not Yet Implemented]
-    #[structopt(short = "-D", long)]
-    no_deinterlace: bool,
-
-    /// Force reencoding of video [Not Yet Implemented]
-    #[structopt(long)]
-    force_reencode: bool,
-
-    /// Use GPU accelerated encoding (nvenc). This produces HEVC. Requires an Nvidia 10-series gpu
-    /// or later [Not Yet Implemented]
-    #[structopt(short, long)]
-    gpu: bool,
-
-    /// Disable hardware-accelerated decoding [Not Yet Implemented]
-    #[structopt(long)]
-    no_hwaccel: bool,
-
-    /// Do not actually perform the conversion [Not Yet Implemented]
-    #[structopt(short, long)]
-    simulate: bool,
-
-    /// Specify libx264 tune. Incompatible with --gpu [Not Yet Implemented]
-    #[structopt(short, long, possible_values = &Libx264Tune::variants(), case_insensitive=true)]
-    tune: Option<Libx264Tune>,
-
-    #[structopt(short, long)]
-    verbose: bool,
-
-    /// Write output to a log file [Not Yet Implemented]
-    #[structopt(long)]
-    log: bool,
-
-    /// The path to operate on
-    #[structopt(default_value = ".")]
-    path: std::path::PathBuf,
-}
-
-arg_enum! {
-    #[derive(Debug)]
-    enum Libx264Tune {
-        Film,
-        Animation,
-        Grain,
-        Stillimage,
-        Psnr,
-        Ssim,
-        Fastdecode,
-        Zerolatency,
-    }
 }
 
 #[derive(Debug)]
@@ -177,7 +137,7 @@ impl Video {
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_BB) => FieldOrder::Interlaced,
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_UNKNOWN) => FieldOrder::Unknown,
             Err(x) => {
-                eprintln!("Error getting field order for stream {}: {:?}", index, x);
+                error!("Error getting field order for stream {}: {:?}", index, x);
                 FieldOrder::Unknown
             }
         };
@@ -354,12 +314,4 @@ fn print_codec_mapping(parsed: &[StreamType], mappings: &[usize], codecs: &HashM
             println!("");
         }
     }
-}
-
-fn prepare_directory<P: AsRef<Path>>(path: P) -> Result<(), std::io::Error> {
-    let dir_to_make = path.as_ref().join("newfiles");
-    if dir_to_make.is_dir() {
-        return Ok(());
-    }
-    std::fs::create_dir(dir_to_make)
 }
