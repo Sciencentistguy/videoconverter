@@ -11,7 +11,7 @@ use ffmpeg::codec;
 use frontend::StreamMappings;
 use interface::Opt;
 use itertools::sorted;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use regex::Regex;
 use std::collections::HashMap;
 use structopt::StructOpt;
@@ -36,6 +36,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut tv_options = interface::get_tv_options()?;
+
+    if tv_options.enabled {
+        match util::write_state(&tv_options) {
+            Ok(_) => {}
+            Err(_) => {
+                warn!("Failed to write statefile /tmp/videoconverter.state");
+            }
+        };
+    }
 
     debug!(
         "tv_mode: {}, tv_show_title: {:?}, tv_show_season: {:?}, tv_show_episode: {:?}.",

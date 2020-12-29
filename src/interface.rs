@@ -3,7 +3,6 @@ use crate::util;
 use clap::arg_enum;
 pub use structopt::StructOpt;
 
-
 #[derive(StructOpt, Debug)]
 #[structopt(setting(clap::AppSettings::ColoredHelp))]
 #[structopt(name = "VideoConverter")]
@@ -74,23 +73,62 @@ pub struct TVOptions {
     pub episode: Option<usize>,
 }
 
-pub fn get_tv_options() -> std::io::Result<TVOptions> {
+pub fn get_tv_options() -> Result<TVOptions, Box<dyn std::error::Error>> {
     let enabled = util::confirm("TV Show Mode", false)?;
+    if !enabled {
+        let title = None;
+        let season = None;
+        let episode = None;
+        return Ok(TVOptions {
+            enabled,
+            title,
+            season,
+            episode,
+        });
+    }
 
-    //let using = false; // for NYI save state feature
-
-    let title = if enabled {
-        Some(util::prompt("Please enter the title of the TV show")?)
-    } else {
-        None
+    let previous = match util::read_state() {
+        Ok(x) => Some(x),
+        Err(_) => None,
     };
 
-    let mut season = None;
-    let mut episode = None;
+    let mut using_previous = previous.is_some();
+    let mut title: Option<String> = None;
 
-    if enabled {
+    if using_previous {
+        print!("Use previous title? ({})", previous.as_ref().unwrap().title.as_ref().unwrap());
+        let b = util::confirm("", false)?;
+        if b {
+            title = previous.as_ref().unwrap().title.clone();
+        } else {
+            using_previous = false;
+        }
+    }
+    if !using_previous {
         loop {
-            match util::prompt("Enter the season of the tv show")?.parse::<usize>() {
+            title = Some(util::prompt("Please enter the title of the TV show")?);
+            if title.as_ref().unwrap().is_empty() {
+                continue;
+            }
+            break;
+        }
+    }
+
+    let mut season = None;
+    let episode;
+
+    if using_previous {
+        print!("Use previous season? ({})", previous.as_ref().and_then(|x| x.season.as_ref()).unwrap());
+        let b = util::confirm("", false)?;
+        if b {
+            season = previous.as_ref().unwrap().season.clone();
+        } else {
+            using_previous = false;
+        }
+    }
+    if !using_previous {
+        loop {
+            match util::prompt("Enter the season index of the tv show")?.parse::<usize>() {
                 Ok(x) => {
                     season = Some(x);
                     break;
@@ -98,17 +136,22 @@ pub fn get_tv_options() -> std::io::Result<TVOptions> {
                 Err(_) => {}
             }
         }
+    }
 
-        loop {
-            match util::prompt("Enter the episode of the tv show")?.parse::<usize>() {
-                Ok(x) => {
-                    episode = Some(x);
-                    break;
-                }
-                Err(_) => {}
+    loop {
+        match util::prompt("Enter the index of the first episode in this directory")?.parse::<usize>() {
+            Ok(x) => {
+                episode = Some(x);
+                break;
             }
+            Err(_) => {}
         }
     }
 
-    return Ok(TVOptions {enabled, title, season, episode});
+    return Ok(TVOptions {
+        enabled,
+        title,
+        season,
+        episode,
+    });
 }
