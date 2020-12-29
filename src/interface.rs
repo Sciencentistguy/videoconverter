@@ -8,7 +8,7 @@ pub use structopt::StructOpt;
 #[structopt(setting(clap::AppSettings::ColoredHelp))]
 #[structopt(name = "VideoConverter")]
 pub struct Opt {
-    /// Keep all streams, regardless of language metadata. [Not Yet Implemented]
+    /// Keep all streams, regardless of language metadata.
     #[structopt(short, long)]
     pub all_streams: bool,
 
@@ -47,13 +47,6 @@ pub struct Opt {
     /// Specify libx264 tune.
     #[structopt(short, long, possible_values = &Libx264Tune::variants(), case_insensitive=true, conflicts_with = "gpu")]
     pub tune: Option<Libx264Tune>,
-
-    #[structopt(short, long)]
-    pub verbose: bool,
-
-    /// Write output to a log file [Not Yet Implemented]
-    #[structopt(long)]
-    pub log: bool,
 
     /// The path to operate on
     #[structopt(default_value = ".")]

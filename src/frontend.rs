@@ -1,3 +1,5 @@
+use crate::interface::Opt;
+
 pub use ffmpeg::codec;
 pub use ffmpeg::codec::{Context, Parameters};
 pub use ffmpeg::format::context::Input;
@@ -141,7 +143,7 @@ pub fn parse_stream_metadata(file: &Input) -> Vec<Stream> {
     return out;
 }
 
-pub fn get_stream_mappings(parsed: &[Stream]) -> StreamMappings {
+pub fn get_stream_mappings(parsed: &[Stream], args: &Opt) -> StreamMappings {
     let mut video: Vec<Stream> = Vec::new();
     let mut audio: Vec<Stream> = Vec::new();
     let mut subtitle: Vec<Stream> = Vec::new();
@@ -154,13 +156,13 @@ pub fn get_stream_mappings(parsed: &[Stream]) -> StreamMappings {
                 video.push(Stream::Video(x.clone()));
             }
             Stream::Audio(x) => {
-                if x.lang == Some("eng".to_string()) {
+                if x.lang == Some("eng".to_string()) || args.all_streams {
                     audio.push(Stream::Audio(x.clone()));
                     //audio_mappings.push(audio.index);
                 }
             }
             Stream::Subtitle(x) => {
-                if x.lang == Some("eng".to_string()) {
+                if x.lang == Some("eng".to_string()) || args.all_streams {
                     subtitle.push(Stream::Subtitle(x.clone()));
                     //subtitle_mappings.push(subtitle.index);
                 }
