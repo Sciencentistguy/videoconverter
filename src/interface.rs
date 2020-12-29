@@ -21,11 +21,11 @@ pub struct Opt {
     pub crop: Option<String>,
 
     /// Force deinterlacing of video [Not Yet Implemented]
-    #[structopt(short, long)]
-    pub deinterlace: bool,
+    #[structopt(short = "-d", long)]
+    pub force_deinterlace: bool,
 
     /// Disable automatic deinterlacing of video [Not Yet Implemented]
-    #[structopt(short = "-D", long)]
+    #[structopt(short = "-D", long, conflicts_with = "force_deinterlace")]
     pub no_deinterlace: bool,
 
     /// Force reencoding of video [Not Yet Implemented]

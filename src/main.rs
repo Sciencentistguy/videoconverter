@@ -4,19 +4,18 @@ extern crate regex;
 #[macro_use]
 extern crate lazy_static;
 
+mod backend;
 mod frontend;
 mod interface;
 mod util;
-mod backend;
 
-use interface::TVOptions;
+use ffmpeg::codec;
+use frontend::StreamMappings;
 use itertools::sorted;
 use log::{debug, info};
 use regex::Regex;
-use structopt::StructOpt;
-use frontend::StreamType;
 use std::collections::HashMap;
-use ffmpeg::codec;
+use structopt::StructOpt;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
@@ -26,9 +25,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         static ref EXEMPT_EXTENSION_REGEX: Regex = Regex::new(r"r\d+").unwrap();
     }
 
-    let opt = interface::Opt::from_args();
+    let args = interface::Opt::from_args();
 
-    debug!("{:?}", opt);
+    debug!("{:?}", args);
 
     // Squelch libav* errors
     unsafe {
@@ -43,7 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let entries = sorted(
-        std::fs::read_dir(&opt.path)?
+        std::fs::read_dir(&args.path)?
             .map(|entry| entry.unwrap().path())
             .filter(|path| !path.is_dir()) // Remove directories
             .filter(|path| {
@@ -67,16 +66,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // prepare directory
     {
         let dir_to_make = if tv_options.enabled {
-            opt.path.join(format!("Season {:02}", tv_options.season.unwrap()))
+            args.path.join(format!("Season {:02}", tv_options.season.unwrap()))
         } else {
-            opt.path.join("newfiles")
+            args.path.join("newfiles")
         };
         let dir_as_str: &str = dir_to_make.as_os_str().to_str().expect("Path contained invalid unicode.");
 
         if dir_to_make.is_dir() {
             info!("Directory '{}' already exists.", dir_as_str);
         } else {
-            if opt.simulate {
+            if args.simulate {
                 info!("Simulate mode: not creating directory '{}'", dir_as_str);
             } else {
                 std::fs::create_dir(&dir_to_make)?;
@@ -87,7 +86,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for input_path in entries {
         let output_filename = backend::generate_output_filename(&input_path, &tv_options);
-
         let output_path = if tv_options.enabled {
             input_path
                 .parent()
@@ -98,6 +96,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         .join(output_filename);
 
+        if let Some(ref mut e) = tv_options.episode {
+            *e += 1;
+        }
+
         info!(
             "Mapping '{}' --> '{}'",
             input_path.as_os_str().to_str().expect("Path contained invalid unicode."),
@@ -107,25 +109,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let file = ffmpeg::format::input(&input_path)?;
 
         let parsed = frontend::parse_stream_metadata(&file);
-        let mappings = frontend::get_mappings(&parsed);
-        let codecs = frontend::get_codecs(&parsed, &mappings);
-        log_codec_mapping(&parsed, &mappings, &codecs);
-        if let Some(ref mut e) = tv_options.episode {
-            *e += 1;
+        let mappings = frontend::get_stream_mappings(&parsed);
+        let codecs = frontend::get_codec_mapping(&mappings);
+        log_codec_mapping(&mappings, &codecs);
+
+        let mut command = backend::generate_ffmpeg_command(input_path, output_path, &mappings, &codecs, &args)?;
+
+        info!("{:?}", command);
+        if !args.simulate {
+            command.status()?;
         }
     }
 
     return Ok(());
 }
 
-fn log_codec_mapping(parsed: &[StreamType], mappings: &[usize], codecs: &HashMap<usize, Option<codec::Id>>) {
-    for index in mappings {
+fn log_codec_mapping(mappings: &StreamMappings, codecs: &HashMap<usize, Option<codec::Id>>) {
+    for stream in mappings.iter() {
+        let index = stream.index();
         let codec = codecs.get(&index).unwrap();
-        let oldcodec = match &parsed[*index] {
-            StreamType::Video(video) => &video.codec,
-            StreamType::Audio(audio) => &audio.codec,
-            StreamType::Subtitle(subtitle) => &subtitle.codec,
-        };
+        let oldcodec = stream.codec();
         let newcodec = match codec {
             None => &oldcodec,
             Some(x) => x,

@@ -1,25 +1,55 @@
-pub use ffmpeg::codec::{Context, Parameters};
 pub use ffmpeg::codec;
+pub use ffmpeg::codec::{Context, Parameters};
 pub use ffmpeg::format::context::Input;
 pub use ffmpeg::media::Type;
-use log::{error, info, warn};
+use log::{error, warn};
 use std::collections::HashMap;
 
+pub struct StreamMappings {
+    pub video: Vec<Stream>,
+    pub audio: Vec<Stream>,
+    pub subtitle: Vec<Stream>,
+}
+
+impl StreamMappings {
+    pub fn iter(&self) -> impl Iterator<Item = &Stream> {
+        self.video.iter().chain(self.audio.iter()).chain(self.subtitle.iter())
+    }
+}
+
 #[derive(Debug)]
-pub enum StreamType {
+pub enum Stream {
     Video(Video),
     Audio(Audio),
     Subtitle(Subtitle),
 }
 
-#[derive(Debug)]
+impl Stream {
+    pub fn index(&self) -> usize {
+        match self {
+            Stream::Video(x) => x.index,
+            Stream::Audio(x) => x.index,
+            Stream::Subtitle(x) => x.index,
+        }
+    }
+
+    pub fn codec(&self) -> codec::Id {
+        match self {
+            Stream::Video(x) => x.codec,
+            Stream::Audio(x) => x.codec,
+            Stream::Subtitle(x) => x.codec,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum FieldOrder {
     Progressive,
     Unknown,
     Interlaced,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Video {
     pub index: usize,
     pub codec: codec::Id,
@@ -48,7 +78,7 @@ impl Video {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Audio {
     pub index: usize,
     pub codec: codec::Id,
@@ -71,7 +101,7 @@ impl Audio {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Subtitle {
     pub index: usize,
     pub codec: codec::Id,
@@ -87,8 +117,8 @@ impl Subtitle {
     }
 }
 
-pub fn parse_stream_metadata(file: &Input) -> Vec<StreamType> {
-    let mut out: Vec<StreamType> = Vec::new();
+pub fn parse_stream_metadata(file: &Input) -> Vec<Stream> {
+    let mut out: Vec<Stream> = Vec::new();
     for stream in file.streams() {
         let index = stream.index();
         let codec_context = stream.codec();
@@ -97,13 +127,13 @@ pub fn parse_stream_metadata(file: &Input) -> Vec<StreamType> {
         //let explode = codec.codec().unwrap();
         match codec_context.medium() {
             Type::Video => {
-                out.push(StreamType::Video(Video::new(index, codec_context, codec_parameters)));
+                out.push(Stream::Video(Video::new(index, codec_context, codec_parameters)));
             }
             Type::Audio => {
-                out.push(StreamType::Audio(Audio::new(index, codec_context, codec_parameters, tags)));
+                out.push(Stream::Audio(Audio::new(index, codec_context, codec_parameters, tags)));
             }
             Type::Subtitle => {
-                out.push(StreamType::Subtitle(Subtitle::new(index, codec_parameters, tags)));
+                out.push(Stream::Subtitle(Subtitle::new(index, codec_parameters, tags)));
             }
             _ => {}
         };
@@ -111,90 +141,93 @@ pub fn parse_stream_metadata(file: &Input) -> Vec<StreamType> {
     return out;
 }
 
-pub fn get_mappings(parsed: &[StreamType]) -> Vec<usize> {
-    let mut video_mappings: Vec<usize> = Vec::new();
-    let mut audio_mappings: Vec<usize> = Vec::new();
-    let mut subtitle_mappings: Vec<usize> = Vec::new();
+pub fn get_stream_mappings(parsed: &[Stream]) -> StreamMappings {
+    let mut video: Vec<Stream> = Vec::new();
+    let mut audio: Vec<Stream> = Vec::new();
+    let mut subtitle: Vec<Stream> = Vec::new();
+    //let mut audio_mappings: Vec<usize> = Vec::new();
+    //let mut subtitle_mappings: Vec<usize> = Vec::new();
 
     for stream in parsed {
         match stream {
-            StreamType::Video(video) => {
-                video_mappings.push(video.index);
+            Stream::Video(x) => {
+                video.push(Stream::Video(x.clone()));
             }
-            StreamType::Audio(audio) => {
-                if audio.lang == Some("eng".to_string()) {
-                    audio_mappings.push(audio.index);
+            Stream::Audio(x) => {
+                if x.lang == Some("eng".to_string()) {
+                    audio.push(Stream::Audio(x.clone()));
+                    //audio_mappings.push(audio.index);
                 }
             }
-            StreamType::Subtitle(subtitle) => {
-                if subtitle.lang == Some("eng".to_string()) {
-                    subtitle_mappings.push(subtitle.index);
+            Stream::Subtitle(x) => {
+                if x.lang == Some("eng".to_string()) {
+                    subtitle.push(Stream::Subtitle(x.clone()));
+                    //subtitle_mappings.push(subtitle.index);
                 }
             }
         }
     }
 
-    if video_mappings.len() != 1 {
-        let num_vids = video_mappings.len();
+    if video.len() != 1 {
+        let num_vids = video.len();
         warn!("File has {} video streams", num_vids);
         //return Err(SimpleError::new(format!("File has {} video streams", num_vids)));
     }
 
-    if audio_mappings.len() == 0 {
+    if audio.len() == 0 {
         // if no english streams are detected, just use all streams
         for stream in parsed {
             match stream {
-                StreamType::Audio(audio) => {
-                    audio_mappings.push(audio.index);
+                Stream::Audio(x) => {
+                    audio.push(Stream::Audio(x.clone()));
                 }
                 _ => {}
             }
         }
     }
 
-    if subtitle_mappings.len() == 0 {
+    if subtitle.len() == 0 {
         // if no english streams are detected, just use all streams
         for stream in parsed.iter() {
             match stream {
-                StreamType::Subtitle(subtitle) => {
-                    subtitle_mappings.push(subtitle.index);
+                Stream::Subtitle(x) => {
+                    subtitle.push(Stream::Subtitle(x.clone()));
                 }
                 _ => {}
             }
         }
     }
 
-    video_mappings
-        .into_iter()
-        .chain(audio_mappings.into_iter())
-        .chain(subtitle_mappings.into_iter())
-        .collect()
+    StreamMappings { video, audio, subtitle }
 }
 
-pub fn get_codecs(parsed: &[StreamType], mappings: &[usize]) -> HashMap<usize, Option<codec::Id>> {
+pub fn get_codec_mapping(mappings: &StreamMappings) -> HashMap<usize, Option<codec::Id>> {
     use codec::Id::{AAC, DTS, DVD_SUBTITLE, FLAC, H264, HDMV_PGS_SUBTITLE, HEVC, SSA, TRUEHD};
+
     mappings
         .iter()
-        .map(|&index| match &parsed[index] {
-            StreamType::Video(video) => match video.codec {
-                HEVC | H264 => (index, None),
-                _ => (index, Some(H264)),
-            },
-            StreamType::Audio(audio) => match audio.codec {
-                FLAC | AAC => (index, None),
+        .map(|stream| {
+            let index = stream.index();
+            match stream {
+                Stream::Video(video) => match video.codec {
+                    HEVC | H264 => (index, None),
+                    _ => (index, Some(H264)),
+                },
+                Stream::Audio(audio) => match audio.codec {
+                    FLAC | AAC => (index, None),
 
-                TRUEHD => (index, Some(FLAC)),
-                DTS => match audio.profile {
-                    Some(codec::Profile::DTS(codec::profile::DTS::HD_MA)) => (index, Some(FLAC)),
+                    TRUEHD => (index, Some(FLAC)),
+                    DTS => match audio.profile {
+                        Some(codec::Profile::DTS(codec::profile::DTS::HD_MA)) => (index, Some(FLAC)),
+                        _ => (index, Some(AAC)),
+                    },
                     _ => (index, Some(AAC)),
                 },
-                _ => (index, Some(AAC)),
-            },
-            StreamType::Subtitle(subtitle) => match subtitle.codec {
-                HDMV_PGS_SUBTITLE | DVD_SUBTITLE => (index, None),
-                _ => (index, Some(SSA)),
-            },
+                Stream::Subtitle(subtitle) => match subtitle.codec {
+                    HDMV_PGS_SUBTITLE | DVD_SUBTITLE => (index, None),
+                    _ => (index, Some(SSA)),
+                },
+            }
         })
         .collect()
 }
-
