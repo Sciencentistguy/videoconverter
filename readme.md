@@ -2,7 +2,7 @@
 
 ## Installation
 
-Install with `cargo install --git https://github.com/Sciencentistguy/VideoConverter.git`
+Install with `cargo install --git https://github.com/Sciencentistguy/videoconverter.git`
 
 ## Usage
 
@@ -12,7 +12,7 @@ Run `videoconverter [path]`.
 
 Run `videoconverter -h` to see possible arguments.
 
-If no arguments are given, by default the program will ask if you want to enable TV show mode. If you do, then it will ask you to provide the show name, the current season, and the first episode in the current directory. (This is useful for DVD box sets, where each disk contains some episodes but not a full season.) TV show mode will then enable [renaming](https://support.plex.tv/articles/naming-and-organizing-your-tv-show-files/), and store the output in a folder named with the season.
+By default the program will ask if you want to enable TV show mode. If you do, then it will ask you to provide the show name, the current season, and the first episode in the current directory. (This is useful for DVD box sets, where each disk contains some episodes but not a full season.) TV show mode will then enable [renaming](https://support.plex.tv/articles/naming-and-organizing-your-tv-show-files/), and store the output in a folder named with the season.
 
 ## Output
 
