@@ -118,10 +118,10 @@ pub fn get_tv_options() -> Result<TVOptions, Box<dyn std::error::Error>> {
     let episode;
 
     if using_previous {
-        print!("Use previous season? ({})", previous.as_ref().and_then(|x| x.season).unwrap());
+        print!("Use previous season? ({})", previous.as_ref().and_then(|x| x.season.as_ref()).unwrap());
         let b = util::confirm("", false)?;
         if b {
-            season = previous.unwrap().season.clone();
+            season = previous.as_ref().unwrap().season.clone();
         } else {
             using_previous = false;
         }

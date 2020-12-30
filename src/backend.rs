@@ -9,10 +9,11 @@ use log::trace;
 use simple_error::SimpleError;
 use std::collections::HashMap;
 use std::iter::Iterator;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 
-pub fn generate_output_filename(path: &PathBuf, tv_options: &TVOptions) -> String {
+pub fn generate_output_filename<P: AsRef<Path>>(path: P, tv_options: &TVOptions) -> String {
+    let path = path.as_ref();
     if tv_options.enabled {
         return format!(
             "{} - s{:02}e{:02}.mkv",
@@ -42,9 +43,9 @@ fn get_encoder(codec: codec::Id) -> Result<&'static str, SimpleError> {
     }
 }
 
-pub fn generate_ffmpeg_command(
-    input_path: &PathBuf,
-    output_path: &PathBuf,
+pub fn generate_ffmpeg_command<P: AsRef<Path>>(
+    input_path: P,
+    output_path: P,
     mappings: &StreamMappings,
     codecs: &HashMap<usize, Option<codec::Id>>,
     //tv_options: &TVOptions,
@@ -69,7 +70,7 @@ pub fn generate_ffmpeg_command(
     }
 
     command.arg("-i");
-    command.arg(input_path.as_os_str());
+    command.arg(input_path.as_ref().as_os_str());
     command.args(&["-max_muxing_queue_size", "16384"]);
 
     let generate_codec_args = |command: &mut Command, stream_type: char, index_in: usize, index_out: usize| -> Result<(), SimpleError> {
@@ -101,7 +102,7 @@ pub fn generate_ffmpeg_command(
                 command.args(&["-x264opts", "opencl"]);
             }
 
-            if let Some(x) = &args.tune {
+            if let Some(x) = args.tune.as_ref() {
                 let s = x.to_string().to_lowercase();
                 command.arg("-tune");
                 command.arg(s);
@@ -156,7 +157,7 @@ pub fn generate_ffmpeg_command(
         command.arg(format!("0:{}", stream.index()));
     }
 
-    command.arg(output_path.as_os_str());
+    command.arg(output_path.as_ref().as_os_str());
 
     return Ok(command);
 }
