@@ -68,7 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         return false;
                     }
                 };
-                let exempt_file_extensions = ["gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt"];
+                let exempt_file_extensions = ["clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt"];
                 return !(exempt_file_extensions.contains(&file_extension) || EXEMPT_EXTENSION_REGEX.is_match(file_extension));
             }),
     );
@@ -118,8 +118,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let file = ffmpeg::format::input(&input_path)?;
 
-        let parsed = frontend::parse_stream_metadata(&file);
-        let stream_mappings = frontend::get_stream_mappings(&parsed, &args);
+        let mut parsed = frontend::parse_stream_metadata(&file);
+        let stream_mappings = frontend::get_stream_mappings(&mut parsed, &args);
         let codec_mappings = frontend::get_codec_mapping(&stream_mappings, &args);
 
         log_mappings(&stream_mappings, &codec_mappings);
