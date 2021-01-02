@@ -6,7 +6,6 @@ use crate::interface::TVOptions;
 use ffmpeg::codec;
 use log::error;
 use log::trace;
-use simple_error::SimpleError;
 use std::collections::HashMap;
 use std::iter::Iterator;
 use std::path::Path;
@@ -29,7 +28,7 @@ pub fn generate_output_filename<P: AsRef<Path>>(path: P, tv_options: &TVOptions)
     }
 }
 
-fn get_encoder(codec: codec::Id) -> Result<&'static str, SimpleError> {
+fn get_encoder(codec: codec::Id) -> Result<&'static str, String> {
     use codec::Id;
     match codec {
         Id::AAC => Ok("libfdk_aac"),
@@ -38,7 +37,7 @@ fn get_encoder(codec: codec::Id) -> Result<&'static str, SimpleError> {
         Id::HEVC => Ok("hevc_nvenc"),
         _ => {
             error!("Invalid codec '{:?}' passed to get_encoder.", codec);
-            return Err(SimpleError::new("Invalid codec passed to get_encoder"));
+            return Err("Invalid codec passed to get_encoder".into());
         }
     }
 }
@@ -73,16 +72,17 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     command.arg(input_path.as_ref().as_os_str());
     command.args(&["-max_muxing_queue_size", "16384"]);
 
-    let generate_codec_args = |command: &mut Command, stream_type: char, index_in: usize, index_out: usize| -> Result<(), SimpleError> {
-        command.arg(format!("-c:{}:{}", stream_type, index_out));
-        let codec = codecs.get(&index_in).expect("Codec not found in map");
-        if codec.is_none() {
-            command.arg("copy");
-        } else {
-            command.arg(get_encoder(codec.unwrap())?);
-        }
-        Ok(())
-    };
+    let generate_codec_args =
+        |command: &mut Command, stream_type: char, index_in: usize, index_out: usize| -> Result<(), Box<dyn std::error::Error>> {
+            command.arg(format!("-c:{}:{}", stream_type, index_out));
+            let codec = codecs.get(&index_in).expect("Codec not found in map");
+            if codec.is_none() {
+                command.arg("copy");
+            } else {
+                command.arg(get_encoder(codec.unwrap())?);
+            }
+            Ok(())
+        };
 
     for (out_index, stream) in mappings.video.iter().enumerate() {
         generate_codec_args(&mut command, 'v', stream.index(), out_index)?;

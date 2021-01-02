@@ -76,14 +76,11 @@ pub struct TVOptions {
 pub fn get_tv_options() -> Result<TVOptions, Box<dyn std::error::Error>> {
     let enabled = util::confirm("TV Show Mode", false)?;
     if !enabled {
-        let title = None;
-        let season = None;
-        let episode = None;
         return Ok(TVOptions {
             enabled,
-            title,
-            season,
-            episode,
+            title: None,
+            season: None,
+            episode: None,
         });
     }
 
@@ -115,7 +112,6 @@ pub fn get_tv_options() -> Result<TVOptions, Box<dyn std::error::Error>> {
     }
 
     let mut season = None;
-    let episode;
 
     if using_previous {
         print!("Use previous season? ({})", previous.as_ref().and_then(|x| x.season.as_ref()).unwrap());
@@ -138,15 +134,14 @@ pub fn get_tv_options() -> Result<TVOptions, Box<dyn std::error::Error>> {
         }
     }
 
-    loop {
+    let episode = loop {
         match util::prompt("Enter the index of the first episode in this directory")?.parse::<usize>() {
             Ok(x) => {
-                episode = Some(x);
-                break;
+                break Some(x);
             }
             Err(_) => {}
         }
-    }
+    };
 
     return Ok(TVOptions {
         enabled,

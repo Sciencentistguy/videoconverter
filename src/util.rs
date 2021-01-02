@@ -49,16 +49,16 @@ pub fn write_state(tv_options: &TVOptions) -> std::io::Result<()> {
 pub fn read_state() -> Result<TVOptions, Box<dyn std::error::Error>> {
     let file = File::open("/tmp/videoconverter.state")?;
     let reader = std::io::BufReader::new(file);
-    let lines: Vec<String> = reader.lines().map(|x| x.unwrap()).collect();
-    let enabled = true;
-    let title = Some(lines[0].clone());
-    let season = Some(lines[1].parse::<usize>()?);
-    let episode = Some(lines[2].parse::<usize>()?);
+    let mut lines = reader.lines().collect::<Result<Vec<String>, std::io::Error>>()?;
+
+    if lines.len() != 3 {
+        return Err("Invalid Data".into());
+    }
 
     Ok(TVOptions {
-        enabled,
-        title,
-        season,
-        episode,
+        enabled: true,
+        title: Some(std::mem::take(&mut lines[0])),
+        season: Some(lines[1].parse::<usize>()?),
+        episode: Some(lines[2].parse::<usize>()?),
     })
 }
