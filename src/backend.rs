@@ -35,6 +35,7 @@ fn get_encoder(codec: codec::Id) -> Result<&'static str, String> {
         Id::FLAC => Ok("flac"),
         Id::H264 => Ok("libx264"),
         Id::HEVC => Ok("hevc_nvenc"),
+        Id::SSA => Ok("ass"),
         _ => {
             error!("Invalid codec '{:?}' passed to get_encoder.", codec);
             return Err("Invalid codec passed to get_encoder".into());
