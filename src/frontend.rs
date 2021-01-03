@@ -185,7 +185,9 @@ pub fn get_stream_mappings(parsed: &mut [Stream], args: &Opt) -> StreamMappings 
     for stream in parsed.into_iter() {
         match stream {
             Stream::Video(x) => {
-                video.push(Stream::Video(take(x)));
+                if x.codec != codec::Id::MJPEG {
+                    video.push(Stream::Video(take(x)));
+                }
             }
             Stream::Audio(x) => {
                 if x.lang == Some("eng".to_string()) || args.all_streams {
