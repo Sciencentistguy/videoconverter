@@ -18,6 +18,11 @@ use structopt::StructOpt;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
+
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "videoconverter=info");
+    }
+
     pretty_env_logger::init();
 
     lazy_static! {
