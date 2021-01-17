@@ -4,6 +4,8 @@
 
 Install with `cargo install --git https://github.com/Sciencentistguy/videoconverter.git`
 
+There is also a `PKGBUILD` provided.
+
 ## Usage
 
 Run `videoconverter [path]`.
