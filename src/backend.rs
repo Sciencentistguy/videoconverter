@@ -132,7 +132,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         if deinterlace {
             trace!("Deinterlacing video");
             if args.gpu {
-                command.args(&["hwupload_cuda", "yadif_cuda"]);
+                command.args(&["hwupload_cuda,yadif_cuda"]);
             } else {
                 command.arg("yadif");
             }
