@@ -93,7 +93,10 @@ pub fn get_tv_options() -> Result<TVOptions, Box<dyn std::error::Error>> {
     let mut title: Option<String> = None;
 
     if using_previous {
-        print!("Use previous title? ({})", previous.as_ref().unwrap().title.as_ref().unwrap());
+        print!(
+            "Use previous title? ({})",
+            previous.as_ref().unwrap().title.as_ref().unwrap()
+        );
         let b = util::confirm("", false)?;
         if b {
             title = previous.as_ref().unwrap().title.clone();
@@ -114,39 +117,39 @@ pub fn get_tv_options() -> Result<TVOptions, Box<dyn std::error::Error>> {
     let mut season = None;
 
     if using_previous {
-        print!("Use previous season? ({})", previous.as_ref().and_then(|x| x.season.as_ref()).unwrap());
+        print!(
+            "Use previous season? ({})",
+            previous.as_ref().and_then(|x| x.season.as_ref()).unwrap()
+        );
         let b = util::confirm("", false)?;
         if b {
-            season = previous.as_ref().unwrap().season.clone();
+            season = previous.as_ref().unwrap().season;
         } else {
             using_previous = false;
         }
     }
+
     if !using_previous {
         loop {
-            match util::prompt("Enter the season index of the tv show")?.parse::<usize>() {
-                Ok(x) => {
-                    season = Some(x);
-                    break;
-                }
-                Err(_) => {}
+            if let Ok(x) = util::prompt("Enter the season index of the tv show")?.parse::<usize>() {
+                season = Some(x);
+                break;
             }
         }
     }
 
     let episode = loop {
-        match util::prompt("Enter the index of the first episode in this directory")?.parse::<usize>() {
-            Ok(x) => {
-                break Some(x);
-            }
-            Err(_) => {}
+        if let Ok(x) =
+            util::prompt("Enter the index of the first episode in this directory")?.parse::<usize>()
+        {
+            break Some(x);
         }
     };
 
-    return Ok(TVOptions {
+    Ok(TVOptions {
         enabled,
         title,
         season,
         episode,
-    });
+    })
 }

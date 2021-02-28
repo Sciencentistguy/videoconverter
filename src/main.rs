@@ -2,6 +2,8 @@
 extern crate lazy_static;
 extern crate ffmpeg_next as ffmpeg;
 
+use std::collections::HashMap;
+
 mod backend;
 mod frontend;
 mod interface;
@@ -10,11 +12,20 @@ mod util;
 use ffmpeg::codec;
 use frontend::StreamMappings;
 use interface::Opt;
-use itertools::sorted;
-use log::{debug, error, info, warn};
+use log::debug;
+use log::error;
+use log::info;
+use log::warn;
 use regex::Regex;
-use std::collections::HashMap;
 use structopt::StructOpt;
+
+const EXEMPT_FILE_EXTENSIONS: [&str; 11] = [
+    "clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt",
+];
+
+lazy_static! {
+    static ref EXEMPT_EXTENSION_REGEX: Regex = Regex::new(r"r\d+").unwrap();
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
@@ -24,10 +35,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     pretty_env_logger::init();
-
-    lazy_static! {
-        static ref EXEMPT_EXTENSION_REGEX: Regex = Regex::new(r"r\d+").unwrap();
-    }
 
     let args = interface::Opt::from_args();
 
@@ -43,12 +50,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tv_options = interface::get_tv_options()?;
 
     if tv_options.enabled {
-        match util::write_state(&tv_options) {
-            Ok(_) => {}
-            Err(_) => {
-                warn!("Failed to write statefile /tmp/videoconverter.state");
-            }
-        };
+        if let Err(e) = util::write_state(&tv_options) {
+            warn!(
+                "Failed to write statefile /tmp/videoconverter.state: '{}'",
+                e
+            );
+        }
     }
 
     debug!(
@@ -56,14 +63,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tv_options.enabled, tv_options.title, tv_options.season, tv_options.episode
     );
 
-    let entries = sorted(
-        std::fs::read_dir(&args.path)?
+    let entries = {
+        let mut v: Vec<_> = std::fs::read_dir(&args.path)?
             .map(|entry| entry.unwrap().path())
             .filter(|path| !path.is_dir()) // Remove directories
             .filter(|path| {
                 // Remove files that start with '.'
                 let filename = path.file_name().and_then(|x| x.to_str()).unwrap();
-                filename.chars().nth(0).unwrap() != '.'
+                filename.starts_with('.')
             })
             .filter(|path| {
                 // Remove files with extensions that are exempt
@@ -73,29 +80,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         return false;
                     }
                 };
-                let exempt_file_extensions = ["clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt"];
-                return !(exempt_file_extensions.contains(&file_extension) || EXEMPT_EXTENSION_REGEX.is_match(file_extension));
-            }),
-    );
+                !(EXEMPT_FILE_EXTENSIONS.contains(&file_extension)
+                    || EXEMPT_EXTENSION_REGEX.is_match(file_extension))
+            })
+            .collect();
+        v.sort();
+        v
+    };
 
     // prepare directory
     {
         let dir_to_make = if tv_options.enabled {
-            args.path.join(format!("Season {:02}", tv_options.season.unwrap()))
+            args.path
+                .join(format!("Season {:02}", tv_options.season.unwrap()))
         } else {
             args.path.join("newfiles")
         };
-        let dir_as_str: &str = dir_to_make.as_os_str().to_str().expect("Path contained invalid unicode.");
+        let dir_as_str = dir_to_make
+            .to_str()
+            .expect("Path contained invalid unicode.");
 
         if dir_to_make.is_dir() {
             info!("Directory '{}' already exists.", dir_as_str);
+        } else if args.simulate {
+            info!("Simulate mode: not creating directory '{}'", dir_as_str);
         } else {
-            if args.simulate {
-                info!("Simulate mode: not creating directory '{}'", dir_as_str);
-            } else {
-                std::fs::create_dir(&dir_to_make)?;
-                info!("Created directory '{}'.", dir_as_str);
-            }
+            std::fs::create_dir(&dir_to_make)?;
+            info!("Created directory '{}'.", dir_as_str);
         }
     }
 
@@ -107,7 +118,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("Somehow the input_path was root")
                 .join(format!("Season {:02}", tv_options.season.unwrap()))
         } else {
-            input_path.parent().expect("Somehow the input_path was root").join("newfiles")
+            input_path
+                .parent()
+                .expect("Somehow the input_path was root")
+                .join("newfiles")
         }
         .join(output_filename);
 
@@ -117,19 +131,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         info!(
             "Mapping '{}' --> '{}'",
-            input_path.as_os_str().to_str().expect("Path contained invalid unicode."),
-            output_path.as_os_str().to_str().expect("Path contained invalid unicode.")
+            input_path
+                .to_str()
+                .expect("Path contained invalid unicode."),
+            output_path
+                .to_str()
+                .expect("Path contained invalid unicode.")
         );
 
         let file = ffmpeg::format::input(&input_path)?;
 
-        let mut parsed = frontend::parse_stream_metadata(&file);
-        let stream_mappings = frontend::get_stream_mappings(&mut parsed, &args);
+        let parsed = frontend::parse_stream_metadata(file);
+        let stream_mappings = frontend::get_stream_mappings(parsed, &args);
         let codec_mappings = frontend::get_codec_mapping(&stream_mappings, &args);
 
         log_mappings(&stream_mappings, &codec_mappings);
 
-        let mut command = backend::generate_ffmpeg_command(input_path, output_path, &stream_mappings, &codec_mappings, &args)?;
+        let mut command = backend::generate_ffmpeg_command(
+            input_path,
+            output_path,
+            &stream_mappings,
+            &codec_mappings,
+            &args,
+        )?;
 
         info!("{:?}", command);
         if !args.simulate {
@@ -137,9 +161,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    return Ok(());
+    Ok(())
 }
 
+#[inline]
 fn log_mappings(mappings: &StreamMappings, codecs: &HashMap<usize, Option<codec::Id>>) {
     for stream in mappings.iter() {
         let index = stream.index();

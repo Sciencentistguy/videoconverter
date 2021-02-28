@@ -1,7 +1,10 @@
-use crate::interface::TVOptions;
 use std::fs::File;
+use std::io::stdin;
+use std::io::stdout;
 use std::io::BufRead;
-use std::io::{stdin, stdout, Write};
+use std::io::Write;
+
+use crate::interface::TVOptions;
 
 pub fn prompt(prompt: &str) -> std::io::Result<String> {
     let mut buf = String::new();
@@ -10,7 +13,7 @@ pub fn prompt(prompt: &str) -> std::io::Result<String> {
     stdout().lock().flush()?;
     stdin().read_line(&mut buf)?;
     buf.truncate(buf.trim_end().len());
-    return Ok(buf);
+    Ok(buf)
 }
 
 pub fn confirm(prompt: &str, default: bool) -> std::io::Result<bool> {
@@ -49,7 +52,9 @@ pub fn write_state(tv_options: &TVOptions) -> std::io::Result<()> {
 pub fn read_state() -> Result<TVOptions, Box<dyn std::error::Error>> {
     let file = File::open("/tmp/videoconverter.state")?;
     let reader = std::io::BufReader::new(file);
-    let mut lines = reader.lines().collect::<Result<Vec<String>, std::io::Error>>()?;
+    let mut lines = reader
+        .lines()
+        .collect::<Result<Vec<String>, std::io::Error>>()?;
 
     if lines.len() != 3 {
         return Err("Invalid Data".into());

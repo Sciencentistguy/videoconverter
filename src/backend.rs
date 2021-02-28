@@ -1,3 +1,8 @@
+use std::collections::HashMap;
+use std::iter::Iterator;
+use std::path::Path;
+use std::process::Command;
+
 use crate::frontend::Stream;
 use crate::frontend::StreamMappings;
 use crate::interface::Opt;
@@ -6,25 +11,28 @@ use crate::interface::TVOptions;
 use ffmpeg::codec;
 use log::error;
 use log::trace;
-use std::collections::HashMap;
-use std::iter::Iterator;
-use std::path::Path;
-use std::process::Command;
 
 pub fn generate_output_filename<P: AsRef<Path>>(path: P, tv_options: &TVOptions) -> String {
     let path = path.as_ref();
     if tv_options.enabled {
-        return format!(
+        format!(
             "{} - s{:02}e{:02}.mkv",
             tv_options.title.as_ref().unwrap(),
             tv_options.season.unwrap(),
             tv_options.episode.unwrap()
-        );
+        )
     } else {
-        let input_filename = path.file_name().expect("Input filename is None").to_string_lossy();
-        let input_ext = path.extension().expect("Input ext is None").to_string_lossy();
-        let output_filename = input_filename.replace(input_ext.as_ref(), "mkv");
-        return output_filename;
+        let input_filename = path
+            .file_name()
+            .expect("Input filename is None")
+            .to_str()
+            .unwrap();
+        let input_ext = path
+            .extension()
+            .expect("Input ext is None")
+            .to_str()
+            .unwrap();
+        input_filename.replace(input_ext, "mkv")
     }
 }
 
@@ -38,7 +46,7 @@ fn get_encoder(codec: codec::Id) -> Result<&'static str, String> {
         Id::SSA => Ok("ass"),
         _ => {
             error!("Invalid codec '{:?}' passed to get_encoder.", codec);
-            return Err("Invalid codec passed to get_encoder".into());
+            Err("Invalid codec passed to get_encoder".into())
         }
     }
 }
@@ -59,8 +67,12 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     }
     .unwrap();
 
-    let reencoding_video = codecs.get(&0usize).unwrap().is_some() || args.force_reencode;
-    let reencoding_audio = itertools::any(mappings.audio.iter().map(|x| x.index()), |x| codecs.get(&x).unwrap().is_some());
+    let reencoding_video = codecs.get(&0).unwrap().is_some() || args.force_reencode;
+    let reencoding_audio = mappings
+        .audio
+        .iter()
+        .map(|x| x.index())
+        .any(|x| codecs.get(&x).unwrap().is_some());
 
     command.arg("-hide_banner");
 
@@ -73,17 +85,20 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     command.arg(input_path.as_ref().as_os_str());
     command.args(&["-max_muxing_queue_size", "16384"]);
 
-    let generate_codec_args =
-        |command: &mut Command, stream_type: char, index_in: usize, index_out: usize| -> Result<(), Box<dyn std::error::Error>> {
-            command.arg(format!("-c:{}:{}", stream_type, index_out));
-            let codec = codecs.get(&index_in).expect("Codec not found in map");
-            if codec.is_none() {
-                command.arg("copy");
-            } else {
-                command.arg(get_encoder(codec.unwrap())?);
-            }
-            Ok(())
-        };
+    let generate_codec_args = |command: &mut Command,
+                               stream_type: char,
+                               index_in: usize,
+                               index_out: usize|
+     -> Result<(), Box<dyn std::error::Error>> {
+        command.arg(format!("-c:{}:{}", stream_type, index_out));
+        let codec = codecs.get(&index_in).expect("Codec not found in map");
+        if codec.is_none() {
+            command.arg("copy");
+        } else {
+            command.arg(get_encoder(codec.unwrap())?);
+        }
+        Ok(())
+    };
 
     for (out_index, stream) in mappings.video.iter().enumerate() {
         generate_codec_args(&mut command, 'v', stream.index(), out_index)?;
@@ -94,16 +109,32 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         if args.gpu {
             command.args(&["-rc", "constqp", "-qp"]);
             command.arg(args.crf.to_string());
-            command.args(&["-preset", "slow", "-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"]);
+            command.args(&[
+                "-preset",
+                "slow",
+                "-profile:v",
+                "main",
+                "-b:v",
+                "0",
+                "-rc-lookahead",
+                "32",
+            ]);
         } else {
             command.arg("-crf");
             command.arg(args.crf.to_string());
-            command.args(&["-profile:v", "high", "-rc-lookahead", "250", "-preset", "slow"]);
+            command.args(&[
+                "-profile:v",
+                "high",
+                "-rc-lookahead",
+                "250",
+                "-preset",
+                "slow",
+            ]);
             if !args.no_hwaccel {
                 command.args(&["-x264opts", "opencl"]);
             }
 
-            if let Some(x) = args.tune.as_ref() {
+            if let Some(ref x) = args.tune {
                 let s = x.to_string().to_lowercase();
                 command.arg("-tune");
                 command.arg(s);
@@ -112,10 +143,10 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
 
         let deinterlace = !args.no_deinterlace
             && (args.force_deinterlace
-                || match video_stream.field_order {
-                    crate::frontend::FieldOrder::Interlaced => true,
-                    _ => false,
-                });
+                || matches!(
+                    video_stream.field_order,
+                    crate::frontend::FieldOrder::Interlaced
+                ));
 
         let crop = args.crop.is_some();
 
@@ -160,5 +191,5 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
 
     command.arg(output_path.as_ref().as_os_str());
 
-    return Ok(command);
+    Ok(command)
 }
