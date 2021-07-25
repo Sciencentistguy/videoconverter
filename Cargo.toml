@@ -14,7 +14,4 @@ log = "0.4.11"
 pretty_env_logger = "0.4.0"
 regex = "1.4.2"
 structopt = "0.3"
-
-[dependencies.ffmpeg-next]
-version = "4.4.0"
-git = "https://github.com/Sciencentistguy/rust-ffmpeg"
+ffmpeg-next="4.4.0"
