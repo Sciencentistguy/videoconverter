@@ -5,11 +5,10 @@ use std::{
 };
 
 use crate::interface::TVOptions;
-
-const STATEFILE_PATH: &str = "/tmp/videoconverter.state";
+use crate::ARGS;
 
 pub fn write_state(tv_options: &TVOptions) -> std::io::Result<()> {
-    let mut file = File::create(STATEFILE_PATH)?;
+    let mut file = File::create(&ARGS.statefile)?;
     write!(
         &mut file,
         "{}\n{}\n{}",
@@ -18,10 +17,10 @@ pub fn write_state(tv_options: &TVOptions) -> std::io::Result<()> {
 }
 
 pub fn read_state() -> Option<TVOptions> {
-    if !Path::new(STATEFILE_PATH).exists() {
+    if !Path::new(&ARGS.statefile).exists() {
         return None;
     }
-    let file = File::open(STATEFILE_PATH).unwrap();
+    let file = File::open(&ARGS.statefile).unwrap();
     let reader = std::io::BufReader::new(file);
     let mut lines = reader
         .lines()

@@ -1,5 +1,6 @@
 use crate::state;
 use crate::util;
+use crate::ARGS;
 
 use clap::arg_enum;
 pub use structopt::StructOpt;
@@ -51,6 +52,14 @@ pub struct Opt {
     /// The path to operate on
     #[structopt(default_value = ".")]
     pub path: std::path::PathBuf,
+
+    /// Enables renaming of files to TV show format
+    #[structopt(long)]
+    pub tv_mode: bool,
+
+    /// The path for the statefile
+    #[structopt(long, default_value = "/tmp/videoconverter.state")]
+    pub statefile: String,
 }
 
 arg_enum! {
@@ -59,11 +68,11 @@ arg_enum! {
         Film,
         Animation,
         Grain,
-        Stillimage,
-        Psnr,
-        Ssim,
-        Fastdecode,
-        Zerolatency,
+        StillImage,
+        PSNR,
+        SSIM,
+        FastDecode,
+        ZeroLatency,
     }
 }
 
@@ -75,7 +84,7 @@ pub struct TVOptions {
 }
 
 pub fn get_tv_options() -> Option<TVOptions> {
-    let enabled = util::confirm("TV Show Mode", false).expect("failed to get user input");
+    let enabled = ARGS.tv_mode || util::confirm("TV Show Mode", false).expect("failed to get user input");
     if !enabled {
         return None;
     }
