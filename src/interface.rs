@@ -1,3 +1,4 @@
+use crate::state;
 use crate::util;
 
 use clap::arg_enum;
@@ -66,90 +67,77 @@ arg_enum! {
     }
 }
 
+#[derive(Debug)]
 pub struct TVOptions {
-    pub enabled: bool,
-    pub title: Option<String>,
-    pub season: Option<usize>,
-    pub episode: Option<usize>,
+    pub title: String,
+    pub season: usize,
+    pub episode: usize,
 }
 
-pub fn get_tv_options() -> Result<TVOptions, Box<dyn std::error::Error>> {
-    let enabled = util::confirm("TV Show Mode", false)?;
+pub fn get_tv_options() -> Option<TVOptions> {
+    let enabled = util::confirm("TV Show Mode", false).expect("failed to get user input");
     if !enabled {
-        return Ok(TVOptions {
-            enabled,
-            title: None,
-            season: None,
-            episode: None,
-        });
+        return None;
     }
 
-    let previous = match util::read_state() {
-        Ok(x) => Some(x),
-        Err(_) => None,
-    };
+    let mut previous_state = state::read_state();
+    //let mut using_previous = previous_state.is_some();
+    let mut title = String::new();
 
-    let mut using_previous = previous.is_some();
-    let mut title: Option<String> = None;
-
-    if using_previous {
-        print!(
-            "Use previous title? ({})",
-            previous.as_ref().unwrap().title.as_ref().unwrap()
-        );
-        let b = util::confirm("", false)?;
-        if b {
-            title = previous.as_ref().unwrap().title.clone();
+    if let Some(ref mut previous_state) = previous_state {
+        if util::confirm(
+            &format!("Use previous title? ({})", previous_state.title),
+            false,
+        )
+        .expect("failed to get user input")
+        {
+            title = std::mem::take(&mut previous_state.title);
         } else {
-            using_previous = false;
         }
     }
-    if !using_previous {
-        loop {
-            title = Some(util::prompt("Please enter the title of the TV show")?);
-            if title.as_ref().unwrap().is_empty() {
-                continue;
+
+    if title.is_empty() {
+        title = loop {
+            let response = util::prompt("Please enter the title of the TV show")
+                .expect("failed to get user input");
+            if !response.is_empty() {
+                break response;
             }
-            break;
         }
     }
 
     let mut season = None;
 
-    if using_previous {
-        print!(
-            "Use previous season? ({})",
-            previous.as_ref().and_then(|x| x.season.as_ref()).unwrap()
-        );
-        let b = util::confirm("", false)?;
-        if b {
-            season = previous.as_ref().unwrap().season;
+    if let Some(previous_state) = previous_state {
+        print!("Use previous season? ({})", previous_state.season);
+        if util::confirm("", false).expect("failed to get user input") {
+            season = Some(previous_state.season);
         } else {
-            using_previous = false;
         }
     }
-
-    if !using_previous {
-        loop {
-            if let Ok(x) = util::prompt("Enter the season index of the tv show")?.parse::<usize>() {
-                season = Some(x);
-                break;
+    if season.is_none() {
+        season = loop {
+            if let Ok(x) = util::prompt("Enter the season index of the tv show")
+                .expect("failed to get user input")
+                .parse::<usize>()
+            {
+                break Some(x);
             }
         }
     }
 
     let episode = loop {
-        if let Ok(x) =
-            util::prompt("Enter the index of the first episode in this directory")?.parse::<usize>()
+        if let Ok(x) = util::prompt("Enter the index of the first episode in this directory")
+            .expect("failed to get user input")
+            .parse::<usize>()
         {
-            break Some(x);
+            break x;
         }
     };
 
-    Ok(TVOptions {
-        enabled,
+    Some(TVOptions {
         title,
-        season,
+        season: season.unwrap(),
         episode,
     })
 }

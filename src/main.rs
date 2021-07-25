@@ -1,5 +1,3 @@
-#[macro_use]
-extern crate lazy_static;
 extern crate ffmpeg_next as ffmpeg;
 
 use std::collections::HashMap;
@@ -7,25 +5,23 @@ use std::collections::HashMap;
 mod backend;
 mod frontend;
 mod interface;
+mod state;
 mod util;
 
 use ffmpeg::codec;
 use frontend::StreamMappings;
 use interface::Opt;
 use log::debug;
-use log::error;
 use log::info;
 use log::warn;
-use regex::Regex;
+use once_cell::sync::Lazy;
 use structopt::StructOpt;
+
+static ARGS: Lazy<interface::Opt> = Lazy::new(interface::Opt::from_args);
 
 const EXEMPT_FILE_EXTENSIONS: [&str; 11] = [
     "clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt",
 ];
-
-lazy_static! {
-    static ref EXEMPT_EXTENSION_REGEX: Regex = Regex::new(r"r\d+").unwrap();
-}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
@@ -36,21 +32,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     pretty_env_logger::init();
 
-    let args = interface::Opt::from_args();
+    validate_args(&ARGS);
 
-    validate_args(&args);
+    debug!("{:?}", ARGS);
 
-    debug!("{:?}", args);
-
-    // Squelch libav* errors
+    // Shut libav* up
+    // Safety: eww global state, but that's how libav* works
     unsafe {
         ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL);
     }
 
-    let mut tv_options = interface::get_tv_options()?;
+    let mut tv_options = interface::get_tv_options();
 
-    if tv_options.enabled {
-        if let Err(e) = util::write_state(&tv_options) {
+    if let Some(ref tv_options) = tv_options {
+        if let Err(e) = state::write_state(&tv_options) {
             warn!(
                 "Failed to write statefile /tmp/videoconverter.state: '{}'",
                 e
@@ -58,19 +53,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    debug!(
-        "tv_mode: {}, tv_show_title: {:?}, tv_show_season: {:?}, tv_show_episode: {:?}.",
-        tv_options.enabled, tv_options.title, tv_options.season, tv_options.episode
-    );
+    debug!("TV Options: {:?}", tv_options,);
 
     let entries = {
-        let mut v: Vec<_> = std::fs::read_dir(&args.path)?
+        let mut v: Vec<_> = std::fs::read_dir(&ARGS.path)?
             .map(|entry| entry.unwrap().path())
             .filter(|path| !path.is_dir()) // Remove directories
             .filter(|path| {
                 // Remove files that start with '.'
                 let filename = path.file_name().and_then(|x| x.to_str()).unwrap();
-                filename.starts_with('.')
+                !filename.starts_with('.')
             })
             .filter(|path| {
                 // Remove files with extensions that are exempt
@@ -80,43 +72,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         return false;
                     }
                 };
-                !(EXEMPT_FILE_EXTENSIONS.contains(&file_extension)
-                    || EXEMPT_EXTENSION_REGEX.is_match(file_extension))
+                // Some rar files come split, with extensions `.r00`, `.r01`...
+                // Adding these to EXEMPT_FILE_EXTENSIONS would be slower than checking the first
+                // character
+                let is_rar_section = file_extension.starts_with('r')
+                    && file_extension[1..].chars().all(|c| c.is_digit(10));
+
+                !(EXEMPT_FILE_EXTENSIONS.contains(&file_extension) || is_rar_section)
             })
             .collect();
-        v.sort();
+        v.sort_unstable();
         v
     };
 
-    // prepare directory
-    {
-        let dir_to_make = if tv_options.enabled {
-            args.path
-                .join(format!("Season {:02}", tv_options.season.unwrap()))
-        } else {
-            args.path.join("newfiles")
-        };
-        let dir_as_str = dir_to_make
-            .to_str()
-            .expect("Path contained invalid unicode.");
+    debug!("Entries: {:#?}", entries);
 
-        if dir_to_make.is_dir() {
-            info!("Directory '{}' already exists.", dir_as_str);
-        } else if args.simulate {
-            info!("Simulate mode: not creating directory '{}'", dir_as_str);
-        } else {
-            std::fs::create_dir(&dir_to_make)?;
-            info!("Created directory '{}'.", dir_as_str);
-        }
+    // prepare directory
+    let output_dir = if let Some(ref tv_options) = tv_options {
+        ARGS.path.join(format!("Season {:02}", tv_options.season))
+    } else {
+        ARGS.path.join("newfiles")
+    };
+    if output_dir.is_dir() {
+        info!("Directory '{:?}' already exists.", output_dir);
+    } else if ARGS.simulate {
+        info!("Simulate mode: not creating directory '{:?}'", output_dir);
+    } else {
+        std::fs::create_dir(&output_dir)?;
+        info!("Created directory '{:?}'.", output_dir);
     }
 
     for input_path in entries {
         let output_filename = backend::generate_output_filename(&input_path, &tv_options);
-        let output_path = if tv_options.enabled {
+        let output_path = if let Some(ref tv_options) = tv_options {
             input_path
                 .parent()
                 .expect("Somehow the input_path was root")
-                .join(format!("Season {:02}", tv_options.season.unwrap()))
+                .join(format!("Season {:02}", tv_options.season))
         } else {
             input_path
                 .parent()
@@ -125,8 +117,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         .join(output_filename);
 
-        if let Some(ref mut e) = tv_options.episode {
-            *e += 1;
+        if let Some(ref mut tv_options) = tv_options {
+            tv_options.episode += 1;
         }
 
         info!(
@@ -142,21 +134,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let file = ffmpeg::format::input(&input_path)?;
 
         let parsed = frontend::parse_stream_metadata(file);
-        let stream_mappings = frontend::get_stream_mappings(parsed, &args);
-        let codec_mappings = frontend::get_codec_mapping(&stream_mappings, &args);
+        let stream_mappings = frontend::get_stream_mappings(parsed);
+        let codec_mappings = frontend::get_codec_mapping(&stream_mappings);
 
         log_mappings(&stream_mappings, &codec_mappings);
 
         let mut command = backend::generate_ffmpeg_command(
             input_path,
             output_path,
-            &stream_mappings,
-            &codec_mappings,
-            &args,
-        )?;
+            stream_mappings,
+            codec_mappings,
+        );
 
         info!("{:?}", command);
-        if !args.simulate {
+        if !ARGS.simulate {
             command.status()?;
         }
     }
@@ -186,15 +177,12 @@ fn log_mappings(mappings: &StreamMappings, codecs: &HashMap<usize, Option<codec:
 
 fn validate_args(args: &Opt) {
     if args.gpu && args.no_hwaccel {
-        error!("The arguments gpu and no_hwaccel are incompatible");
-        panic!();
+        panic!("The arguments gpu and no_hwaccel are incompatible");
     }
     if args.gpu && args.tune.is_some() {
-        error!("The arguments gpu and tune are incompatible");
-        panic!();
+        panic!("The arguments gpu and no_hwaccel are incompatible");
     }
     if args.force_deinterlace && args.no_deinterlace {
-        error!("The arguments force_deinterlace and no_deinterlace are incompatible");
-        panic!();
+        panic!("The arguments gpu and no_hwaccel are incompatible");
     }
 }
