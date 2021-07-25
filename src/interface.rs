@@ -54,7 +54,7 @@ pub struct Opt {
     pub path: std::path::PathBuf,
 
     /// Enables renaming of files to TV show format
-    #[structopt(long)]
+    #[structopt(long, short = "-T")]
     pub tv_mode: bool,
 
     /// The path for the statefile
