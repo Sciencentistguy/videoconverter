@@ -235,8 +235,11 @@ pub fn get_stream_mappings(mut parsed: Vec<Stream>) -> StreamMappings {
 
     if videos.len() != 1 {
         let num_vids = videos.len();
-        warn!("File has {} video streams", num_vids);
-        //return Err(SimpleError::new(format!("File has {} video streams", num_vids)));
+        warn!(
+            "File has {} video streams. Only the first stream will be kept",
+            num_vids
+        );
+        videos.truncate(1);
     }
 
     if audios.is_empty() {
@@ -264,9 +267,7 @@ pub fn get_stream_mappings(mut parsed: Vec<Stream>) -> StreamMappings {
     }
 }
 
-pub fn get_codec_mapping(
-    stream_mappings: &StreamMappings,
-) -> HashMap<usize, Option<codec::Id>> {
+pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Option<codec::Id>> {
     use codec::Id::AAC;
     use codec::Id::DTS;
     use codec::Id::DVD_SUBTITLE;
