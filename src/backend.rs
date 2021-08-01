@@ -55,8 +55,8 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     let mut command = Command::new("ffmpeg");
     command.arg("-hide_banner");
 
-    let video_stream = match &mappings.video[0] {
-        Stream::Video(x) => x,
+    let video_stream = match mappings.video.get(0) {
+        Some(Stream::Video(x)) => x,
         _ => panic!("File does not have a video stream."),
     };
 
