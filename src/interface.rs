@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::state;
 use crate::util;
 use crate::ARGS;
@@ -59,7 +61,7 @@ pub struct Opt {
 
     /// The path for the statefile
     #[structopt(long, default_value = "/tmp/videoconverter.state")]
-    pub statefile: String,
+    pub statefile: PathBuf,
 }
 
 arg_enum! {
@@ -84,24 +86,24 @@ pub struct TVOptions {
 }
 
 pub fn get_tv_options() -> Option<TVOptions> {
-    let enabled = ARGS.tv_mode || util::confirm("TV Show Mode", false).expect("failed to get user input");
+    let enabled =
+        ARGS.tv_mode || util::confirm("TV Show Mode", false).expect("failed to get user input");
     if !enabled {
         return None;
     }
 
     let mut previous_state = state::read_state();
-    //let mut using_previous = previous_state.is_some();
     let mut title = String::new();
 
     if let Some(ref mut previous_state) = previous_state {
-        if util::confirm(
+        let use_old_value = util::confirm(
             &format!("Use previous title? ({})", previous_state.title),
             false,
         )
-        .expect("failed to get user input")
-        {
+        .expect("failed to get user input");
+
+        if use_old_value {
             title = std::mem::take(&mut previous_state.title);
-        } else {
         }
     }
 
@@ -119,11 +121,13 @@ pub fn get_tv_options() -> Option<TVOptions> {
 
     if let Some(previous_state) = previous_state {
         print!("Use previous season? ({})", previous_state.season);
-        if util::confirm("", false).expect("failed to get user input") {
+        let use_old_value = util::confirm("", false).expect("failed to get user input");
+
+        if use_old_value {
             season = Some(previous_state.season);
-        } else {
         }
     }
+
     if season.is_none() {
         season = loop {
             if let Ok(x) = util::prompt("Enter the season index of the tv show")

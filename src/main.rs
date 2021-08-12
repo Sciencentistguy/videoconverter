@@ -1,6 +1,7 @@
 extern crate ffmpeg_next as ffmpeg;
 
 use std::collections::HashMap;
+use std::os::unix::prelude::OsStrExt;
 
 mod backend;
 mod frontend;
@@ -37,7 +38,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("{:?}", ARGS);
 
     // Shut libav* up
-    // Safety: eww global state, but that's how libav* works
+    // Safety: Calling c function, modifying global state
     unsafe {
         ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL);
     }
@@ -61,24 +62,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .filter(|path| !path.is_dir()) // Remove directories
             .filter(|path| {
                 // Remove files that start with '.'
-                let filename = path.file_name().and_then(|x| x.to_str()).unwrap();
-                !filename.starts_with('.')
+                !path
+                    .file_name()
+                    .map(|filename| filename.as_bytes().starts_with(b"."))
+                    .unwrap_or(true) // Remove files that have no filename (?)
             })
             .filter(|path| {
                 // Remove files with extensions that are exempt
                 let file_extension = match path.extension().and_then(|x| x.to_str()) {
                     Some(x) => x,
                     None => {
+                        // Remove filles with no extension
                         return false;
                     }
                 };
-                // Some rar files come split, with extensions `.r00`, `.r01`...
-                // Adding these to EXEMPT_FILE_EXTENSIONS would be slower than checking the first
-                // character
-                let is_rar_section = file_extension.starts_with('r')
+                // Remove files of the form `*.r00`, `*.r01`, etc
+                let is_rar_segment = file_extension.starts_with('r')
                     && file_extension[1..].chars().all(|c| c.is_digit(10));
 
-                !(EXEMPT_FILE_EXTENSIONS.contains(&file_extension) || is_rar_section)
+                !(EXEMPT_FILE_EXTENSIONS.contains(&file_extension) || is_rar_segment)
             })
             .collect();
         v.sort_unstable();

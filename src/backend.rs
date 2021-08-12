@@ -60,7 +60,8 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         _ => panic!("File does not have a video stream."),
     };
 
-    let reencoding_video = target_codecs[&0].is_some() || ARGS.force_reencode;
+
+    let reencoding_video = target_codecs[&video_stream.index].is_some() || ARGS.force_reencode;
     let reencoding_audio = mappings
         .audio
         .iter()

@@ -1,11 +1,13 @@
+use crate::interface::TVOptions;
+use crate::ARGS;
+
 use std::{
     fs::File,
     io::{BufRead, Write},
     path::Path,
 };
 
-use crate::interface::TVOptions;
-use crate::ARGS;
+use log::*;
 
 pub fn write_state(tv_options: &TVOptions) -> std::io::Result<()> {
     let mut file = File::create(&ARGS.statefile)?;
@@ -20,12 +22,25 @@ pub fn read_state() -> Option<TVOptions> {
     if !Path::new(&ARGS.statefile).exists() {
         return None;
     }
-    let file = File::open(&ARGS.statefile).unwrap();
+    let file = match File::open(&ARGS.statefile) {
+        Ok(x) => x,
+        Err(e) => {
+            warn!("{}", e);
+            return None;
+        }
+    };
+
     let reader = std::io::BufReader::new(file);
-    let mut lines = reader
+    let mut lines = match reader
         .lines()
         .collect::<Result<Vec<String>, std::io::Error>>()
-        .unwrap();
+    {
+        Ok(x) => x,
+        Err(e) => {
+            warn!("{}", e);
+            return None;
+        }
+    };
 
     if !validate_state(&lines) {
         return None;
@@ -33,8 +48,8 @@ pub fn read_state() -> Option<TVOptions> {
 
     Some(TVOptions {
         title: std::mem::take(&mut lines[0]),
-        season: lines[1].parse::<usize>().unwrap(),
-        episode: lines[2].parse::<usize>().unwrap(),
+        season: lines[1].parse::<usize>().ok()?,
+        episode: lines[2].parse::<usize>().ok()?,
     })
 }
 
