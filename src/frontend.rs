@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::mem;
 
+use crate::interface::Encoder;
 use crate::ARGS;
 
 pub use ffmpeg::codec;
@@ -284,8 +285,15 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
             let index = stream.index();
             match stream {
                 Stream::Video(video) => match video.codec {
-                    HEVC | H264 => (index, None),
-                    _ => (index, Some(if ARGS.gpu { HEVC } else { H264 })),
+                    HEVC | H264 if !ARGS.force_reencode_video => (index, None),
+                    _ => (
+                        index,
+                        Some(match ARGS.encoder {
+                            Encoder::Libx264 => H264,
+                            Encoder::Libx265 => HEVC,
+                            Encoder::Nvenc => HEVC,
+                        }),
+                    ),
                 },
                 Stream::Audio(audio) => match audio.codec {
                     FLAC | AAC => (index, None),

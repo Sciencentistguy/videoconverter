@@ -11,7 +11,6 @@ mod util;
 
 use ffmpeg::codec;
 use frontend::StreamMappings;
-use interface::Opt;
 use log::debug;
 use log::info;
 use log::warn;
@@ -33,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     pretty_env_logger::init();
 
-    validate_args(&ARGS);
+    validate_args();
 
     debug!("{:?}", ARGS);
 
@@ -46,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tv_options = interface::get_tv_options();
 
     if let Some(ref tv_options) = tv_options {
-        if let Err(e) = state::write_state(&tv_options) {
+        if let Err(e) = state::write_state(tv_options) {
             warn!(
                 "Failed to write statefile /tmp/videoconverter.state: '{}'",
                 e
@@ -177,14 +176,19 @@ fn log_mappings(mappings: &StreamMappings, codecs: &HashMap<usize, Option<codec:
     }
 }
 
-fn validate_args(args: &Opt) {
-    if args.gpu && args.no_hwaccel {
-        panic!("The arguments gpu and no_hwaccel are incompatible");
+fn validate_args() {
+    if matches!(ARGS.encoder, interface::Encoder::Nvenc) {
+        if ARGS.no_hwaccel {
+            eprintln!("Hardware acceleration cannot be disabled when using nvenc");
+            std::process::exit(1);
+        }
+        if ARGS.tune.is_some() {
+            eprintln!("Libx264 tunes cannot be used with nvenc.");
+            std::process::exit(1);
+        }
     }
-    if args.gpu && args.tune.is_some() {
-        panic!("The arguments gpu and no_hwaccel are incompatible");
-    }
-    if args.force_deinterlace && args.no_deinterlace {
-        panic!("The arguments gpu and no_hwaccel are incompatible");
+    if ARGS.force_deinterlace && ARGS.no_deinterlace {
+        eprintln!("The arguments `--force-deinterlace` and `--no-deinterlace` are incompatible.");
+        std::process::exit(1);
     }
 }

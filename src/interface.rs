@@ -24,20 +24,20 @@ pub struct Opt {
     pub crop: Option<String>,
 
     /// Force deinterlacing of video
-    #[structopt(short = "-d", long)]
+    #[structopt(short = "-d", long, conflicts_with = "no-deinterlace")]
     pub force_deinterlace: bool,
 
     /// Disable automatic deinterlacing of video
-    #[structopt(short = "-D", long, conflicts_with = "force_deinterlace")]
+    #[structopt(short = "-D", long, conflicts_with = "force-deinterlace")]
     pub no_deinterlace: bool,
 
     /// Force reencoding of video
-    #[structopt(long)]
-    pub force_reencode: bool,
+    #[structopt(long = "force-reencode")]
+    pub force_reencode_video: bool,
 
-    /// Use GPU accelerated encoding (nvenc). This produces HEVC. Requires an Nvidia 10-series gpu or later
-    #[structopt(short, long, conflicts_with = "no_hwaccel")]
-    pub gpu: bool,
+    /// Specify encoder to use.
+    #[structopt(short = "m", long = "mode", default_value = "Libx264", case_insensitive=true, possible_values = &Encoder::variants())]
+    pub encoder: Encoder,
 
     /// Disable hardware-accelerated decoding
     #[structopt(long)]
@@ -47,8 +47,8 @@ pub struct Opt {
     #[structopt(short, long)]
     pub simulate: bool,
 
-    /// Specify libx264 tune.
-    #[structopt(short, long, possible_values = &Libx264Tune::variants(), case_insensitive=true, conflicts_with = "gpu")]
+    /// Specify libx264 tune. Has no effect with Nvenc.
+    #[structopt(short, long, possible_values = &Libx264Tune::variants(), case_insensitive=true)]
     pub tune: Option<Libx264Tune>,
 
     /// The path to operate on
@@ -62,6 +62,15 @@ pub struct Opt {
     /// The path for the statefile
     #[structopt(long, default_value = "/tmp/videoconverter.state")]
     pub statefile: PathBuf,
+}
+
+arg_enum! {
+    #[derive(Debug)]
+    pub enum Encoder {
+        Libx264,
+        Libx265,
+        Nvenc,
+    }
 }
 
 arg_enum! {
