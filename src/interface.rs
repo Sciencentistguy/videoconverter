@@ -6,6 +6,7 @@ use crate::ARGS;
 
 use clap::arg_enum;
 pub use structopt::StructOpt;
+use regex::Regex;
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting(clap::AppSettings::ColoredHelp))]
@@ -19,8 +20,8 @@ pub struct Opt {
     #[structopt(long, default_value = "20")]
     pub crf: u8,
 
-    /// Specify a crop filter. These are of the format 'crop=height:width:x:y'
-    #[structopt(long)]
+    /// Specify a crop filter. These are of the format `crop=height:width:x:y`
+    #[structopt(long, parse(try_from_str = parse_crop_filter))]
     pub crop: Option<String>,
 
     /// Force deinterlacing of video
@@ -71,6 +72,15 @@ pub struct Opt {
     /// and so cannot be safely interrupted with, e.g. Ctrl-C.
     #[structopt(short, long)]
     pub parallel: bool,
+}
+
+fn parse_crop_filter(input: &str) -> Result<String, String> {
+    let r = Regex::new(r"crop=\d\+:\d\+:\d\+:\d\+").unwrap();
+    if !r.is_match(input) {
+        return Err("must be of the form `crop=height:width:x:y`".to_string());
+    }
+    // TODO check that its a proper crop string
+    Ok(input.to_owned())
 }
 
 arg_enum! {
