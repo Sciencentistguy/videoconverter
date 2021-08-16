@@ -60,7 +60,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     let mut command = Command::new("ffmpeg");
     command.arg("-hide_banner"); // Remove gpl banner
 
-    if output_path.as_ref().exists() {
+    if !ARGS.simulate && output_path.as_ref().exists() {
         error!(
             "Output file {} already exists. Exiting",
             output_path.as_ref().to_string_lossy()
@@ -114,34 +114,11 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         generate_codec_args(&mut command, 'v', stream.index(), out_index);
     }
 
-    const NVENC_FLAGS: &[&str] = &[
-        "-preset",
-        "slow",
-        "-profile:v",
-        "main",
-        "-b:v",
-        "0",
-        "-rc-lookahead",
-        "32",
-    ];
+    const NVENC_FLAGS: &[&str] = &["-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"];
 
-    const LIBX264_FLAGS: &[&str] = &[
-        "-profile:v",
-        "high",
-        "-rc-lookahead",
-        "250",
-        "-preset",
-        "slow",
-    ];
+    const LIBX264_FLAGS: &[&str] = &["-profile:v", "high", "-rc-lookahead", "250"];
 
-    const LIBX265_FLAGS: &[&str] = &[
-        "-profile:v",
-        "main10",
-        "-preset",
-        "slow",
-        "-x265-params",
-        "rc-lookahead=250",
-    ];
+    const LIBX265_FLAGS: &[&str] = &["-profile:v", "main10", "-x265-params", "rc-lookahead=250"];
 
     const LIBFDK_AAC_FLAGS: &[&str] = &["-cutoff", "18000", "-vbr", "5"];
 
@@ -179,6 +156,11 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
                 command.args(NVENC_FLAGS);
             }
         }
+
+        let mut preset = ARGS.preset.to_string();
+        preset.make_ascii_lowercase();
+        command.arg("-preset");
+        command.arg(preset);
 
         let mut filter_args: [Option<&str>; 2] = [None; 2];
 

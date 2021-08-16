@@ -36,8 +36,12 @@ pub struct Opt {
     pub force_reencode_video: bool,
 
     /// Specify encoder to use.
-    #[structopt(short = "m", long = "mode", default_value = "Libx264", case_insensitive=true, possible_values = &Encoder::variants())]
+    #[structopt(short, long, default_value = "Libx264", case_insensitive=true, possible_values = &Encoder::variants())]
     pub encoder: Encoder,
+
+    /// Specify encoder preset
+    #[structopt(long, default_value = "Slow", case_insensitive=true, possible_values = &Preset::variants())]
+    pub preset: Preset,
 
     /// Disable hardware-accelerated decoding
     #[structopt(long)]
@@ -75,6 +79,22 @@ arg_enum! {
         Libx264,
         Libx265,
         Nvenc,
+    }
+}
+
+arg_enum! {
+    #[derive(Debug)]
+    pub enum Preset {
+        Ultrafast,
+        Superfast,
+        Veryfast,
+        Faster,
+        Fast,
+        Medium,
+        Slow,
+        Slower,
+        Veryslow,
+        Placebo,
     }
 }
 
