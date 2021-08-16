@@ -12,8 +12,8 @@ source=("$pkgname::git+https://github.com/Sciencentistguy/videoconverter.git")
 sha1sums=('SKIP')
 
 pkgver() {
-    cd "$pkgname"
-    git log --pretty=format:'%h' -n 1
+  cd "$pkgname"
+  printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
 }
 
 build() {
