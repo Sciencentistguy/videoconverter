@@ -62,6 +62,11 @@ pub struct Opt {
     /// The path for the statefile
     #[structopt(long, default_value = "/tmp/videoconverter.state")]
     pub statefile: PathBuf,
+
+    /// Spawn each ffmpeg command concurrently. Currently doesn't kill child processes properly,
+    /// and so cannot be safely interrupted with, e.g. Ctrl-C.
+    #[structopt(short, long)]
+    pub parallel: bool,
 }
 
 arg_enum! {

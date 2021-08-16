@@ -11,9 +11,7 @@ mod util;
 
 use ffmpeg::codec;
 use frontend::StreamMappings;
-use log::debug;
-use log::info;
-use log::warn;
+use log::*;
 use once_cell::sync::Lazy;
 use structopt::StructOpt;
 
@@ -148,8 +146,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         info!("{:?}", command);
+
         if !ARGS.simulate {
-            command.status()?;
+            if ARGS.parallel {
+                command.spawn()?;
+            } else {
+                command.status()?;
+            }
         }
     }
 

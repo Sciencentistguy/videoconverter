@@ -58,14 +58,23 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     target_codecs: HashMap<usize, Option<codec::Id>>,
 ) -> std::process::Command {
     let mut command = Command::new("ffmpeg");
-    command.arg("-hide_banner");
+    command.arg("-hide_banner"); // Remove gpl banner
+
+    if output_path.as_ref().exists() {
+        error!(
+            "Output file {} already exists. Exiting",
+            output_path.as_ref().to_string_lossy()
+        );
+        std::process::exit(1);
+    }
 
     let video_stream = match mappings.video.get(0) {
         Some(Stream::Video(x)) => x,
         _ => panic!("File does not have a video stream."),
     };
 
-    let reencoding_video = target_codecs[&video_stream.index].is_some() || ARGS.force_reencode_video;
+    let reencoding_video =
+        target_codecs[&video_stream.index].is_some() || ARGS.force_reencode_video;
     let reencoding_audio = mappings
         .audio
         .iter()
