@@ -10,6 +10,7 @@ use crate::interface::TVOptions;
 use crate::ARGS;
 
 use ffmpeg::codec;
+use ffmpeg::media::Type;
 use itertools::Itertools;
 use log::*;
 
@@ -98,7 +99,9 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             command.arg(format!("-c:{}:{}", stream_type, index_out));
             if let Some(&codec) = codec.as_ref() {
                 command.arg(get_encoder(codec));
-            } else if ARGS.force_reencode_video {
+            } else if mappings.video.iter().map(|x| x.index()).contains(&index_in)
+                && ARGS.force_reencode_video
+            {
                 let encoder = match ARGS.encoder {
                     Encoder::Libx264 => "libx264",
                     Encoder::Libx265 => "libx265",
