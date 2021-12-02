@@ -11,9 +11,9 @@ mod util;
 
 use ffmpeg::codec;
 use frontend::StreamMappings;
-use log::*;
 use once_cell::sync::Lazy;
 use structopt::StructOpt;
+use tracing::*;
 
 static ARGS: Lazy<interface::Opt> = Lazy::new(interface::Opt::from_args);
 
@@ -28,11 +28,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::set_var("RUST_LOG", "videoconverter=info");
     }
 
-    pretty_env_logger::init();
+    tracing_subscriber::fmt().pretty().init();
 
     validate_args();
 
-    debug!("{:?}", ARGS);
+    debug!(?ARGS);
 
     // Shut libav* up
     // Safety: Calling c function, modifying global state
@@ -45,13 +45,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(ref tv_options) = tv_options {
         if let Err(e) = state::write_state(tv_options) {
             warn!(
-                "Failed to write statefile /tmp/videoconverter.state: '{}'",
-                e
+                error = %e,
+                "Failed to write statefile /tmp/videoconverter.state"
             );
         }
     }
 
-    debug!("TV Options: {:?}", tv_options,);
+    debug!(?tv_options);
 
     let entries = {
         let mut v: Vec<_> = std::fs::read_dir(&ARGS.path)?
@@ -84,7 +84,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         v
     };
 
-    debug!("Entries: {:#?}", entries);
+    debug!(?entries);
 
     // prepare directory
     let output_dir = if let Some(ref tv_options) = tv_options {
@@ -93,12 +93,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ARGS.path.join("newfiles")
     };
     if output_dir.is_dir() {
-        info!("Directory '{:?}' already exists.", output_dir);
+        info!(dir = ?output_dir, "Directory already exists");
     } else if ARGS.simulate {
-        info!("Simulate mode: not creating directory '{:?}'", output_dir);
+        info!(dir = ?output_dir, "Simulate mode: not creating directory");
     } else {
         std::fs::create_dir(&output_dir)?;
-        info!("Created directory '{:?}'.", output_dir);
+        info!(dir = ?output_dir, "Created directory");
     }
 
     for input_path in entries {
@@ -145,7 +145,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             codec_mappings,
         );
 
-        info!("{:?}", command);
+        info!(?command);
 
         if !ARGS.simulate {
             if ARGS.parallel {
@@ -169,6 +169,7 @@ fn log_mappings(mappings: &StreamMappings, codecs: &HashMap<usize, Option<codec:
             None => &oldcodec,
             Some(x) => x,
         };
+
         info!(
             "Mapping stream {}: {:?} -> {:?}{}",
             index,

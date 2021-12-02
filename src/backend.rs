@@ -10,9 +10,8 @@ use crate::interface::TVOptions;
 use crate::ARGS;
 
 use ffmpeg::codec;
-use ffmpeg::media::Type;
 use itertools::Itertools;
-use log::*;
+use tracing::*;
 
 pub fn generate_output_filename<P: AsRef<Path>>(path: P, tv_options: &Option<TVOptions>) -> String {
     let path = path.as_ref();
@@ -62,9 +61,8 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     command.arg("-hide_banner"); // Remove gpl banner
 
     if !ARGS.simulate && output_path.as_ref().exists() {
-        error!(
-            "Output file {} already exists. Exiting",
-            output_path.as_ref().to_string_lossy()
+        error!(file = ?output_path.as_ref().to_string_lossy(),
+            "Output file already exists. Exiting"
         );
         std::process::exit(1);
     }
@@ -174,7 +172,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         let deinterlace = should_deinterlace && ARGS.no_deinterlace || ARGS.force_deinterlace;
 
         filter_args[0] = if let Some(ref filter) = ARGS.crop {
-            trace!("Cropping video with filter '{}'", filter);
+            trace!(?filter, "Cropping video with filter");
             ARGS.crop.as_deref()
         } else {
             None

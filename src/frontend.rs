@@ -9,8 +9,7 @@ pub use ffmpeg::codec::Context;
 pub use ffmpeg::codec::Parameters;
 pub use ffmpeg::format::context::Input;
 pub use ffmpeg::media::Type;
-use log::error;
-use log::warn;
+use tracing::*;
 
 #[derive(Debug)]
 pub enum FieldOrder {
@@ -94,7 +93,7 @@ impl Video {
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_BB) => FieldOrder::Interlaced,
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_UNKNOWN) => FieldOrder::Unknown,
             Err(x) => {
-                error!("Error getting field order for stream {}: {:?}", index, x);
+                error!(stream = %index, err = ?x, "Error getting field order");
                 FieldOrder::Unknown
             }
         };
@@ -236,10 +235,7 @@ pub fn get_stream_mappings(mut parsed: Vec<Stream>) -> StreamMappings {
 
     if videos.len() != 1 {
         let num_vids = videos.len();
-        warn!(
-            "File has {} video streams. Only the first stream will be kept",
-            num_vids
-        );
+        warn!(n = ?num_vids, "File has multiple video streams. Only the first stream will be kept");
         videos.truncate(1);
     }
 

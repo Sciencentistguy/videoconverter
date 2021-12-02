@@ -5,8 +5,8 @@ use crate::util;
 use crate::ARGS;
 
 use clap::arg_enum;
-pub use structopt::StructOpt;
 use regex::Regex;
+pub use structopt::StructOpt;
 
 #[derive(StructOpt, Debug)]
 #[structopt(setting(clap::AppSettings::ColoredHelp))]

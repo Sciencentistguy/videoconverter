@@ -7,7 +7,7 @@ use std::{
     path::Path,
 };
 
-use log::*;
+use tracing::*;
 
 pub fn write_state(tv_options: &TVOptions) -> std::io::Result<()> {
     let mut file = File::create(&ARGS.statefile)?;
@@ -25,7 +25,7 @@ pub fn read_state() -> Option<TVOptions> {
     let file = match File::open(&ARGS.statefile) {
         Ok(x) => x,
         Err(e) => {
-            warn!("{}", e);
+            warn!(err = ?e, "Failed to open file");
             return None;
         }
     };
@@ -37,7 +37,7 @@ pub fn read_state() -> Option<TVOptions> {
     {
         Ok(x) => x,
         Err(e) => {
-            warn!("{}", e);
+            warn!(err = ?e, "Failed to read file");
             return None;
         }
     };
