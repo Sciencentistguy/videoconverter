@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 clap = "2.33.3"
 itertools = "0.10.1"
-log = "0.4.11"
+log = "0.4.14"
 pretty_env_logger = "0.4.0"
 structopt = "0.3"
 ffmpeg-next="4.4.0"
