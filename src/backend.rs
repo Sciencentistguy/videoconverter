@@ -5,7 +5,7 @@ use std::process::Command;
 
 use crate::frontend::Stream;
 use crate::frontend::StreamMappings;
-use crate::interface::Encoder;
+use crate::interface::VideoEncoder;
 use crate::interface::TVOptions;
 use crate::ARGS;
 
@@ -42,9 +42,9 @@ fn get_encoder(codec: codec::Id) -> &'static str {
         Id::FLAC => "flac",
         Id::H264 => "libx264",
         Id::HEVC => match ARGS.encoder {
-            Encoder::Libx264 => unreachable!(),
-            Encoder::Libx265 => "libx265",
-            Encoder::Nvenc => "hevc_nvenc",
+            VideoEncoder::Libx264 => unreachable!(),
+            VideoEncoder::Libx265 => "libx265",
+            VideoEncoder::Nvenc => "hevc_nvenc",
         },
         Id::SSA => "ass",
         _ => panic!("Invalid output codec '{:?}' passed to get_encoder.", codec),
@@ -101,9 +101,9 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
                 && ARGS.force_reencode_video
             {
                 let encoder = match ARGS.encoder {
-                    Encoder::Libx264 => "libx264",
-                    Encoder::Libx265 => "libx265",
-                    Encoder::Nvenc => "hevc_nvenc",
+                    VideoEncoder::Libx264 => "libx264",
+                    VideoEncoder::Libx265 => "libx265",
+                    VideoEncoder::Nvenc => "hevc_nvenc",
                 };
                 command.arg(encoder);
             } else {
@@ -126,7 +126,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     if reencoding_video {
         trace!("Reencoding video");
         match ARGS.encoder {
-            Encoder::Libx264 => {
+            VideoEncoder::Libx264 => {
                 command.arg("-crf");
                 command.arg(ARGS.crf.to_string());
                 command.args(LIBX264_FLAGS);
@@ -140,7 +140,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
                     command.arg(s);
                 }
             }
-            Encoder::Libx265 => {
+            VideoEncoder::Libx265 => {
                 command.arg("-crf");
                 command.arg(ARGS.crf.to_string());
                 command.args(LIBX265_FLAGS);
@@ -151,7 +151,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
                     command.arg(s);
                 }
             }
-            Encoder::Nvenc => {
+            VideoEncoder::Nvenc => {
                 command.args(&["-rc", "constqp", "-qp"]);
                 command.arg(ARGS.crf.to_string());
                 command.args(NVENC_FLAGS);
@@ -180,7 +180,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
 
         filter_args[1] = if deinterlace {
             trace!("Deinterlacing video");
-            if matches!(ARGS.encoder, Encoder::Nvenc) {
+            if matches!(ARGS.encoder, VideoEncoder::Nvenc) {
                 Some("hwupload_cuda,yadif_cuda")
             } else {
                 Some("yadif")

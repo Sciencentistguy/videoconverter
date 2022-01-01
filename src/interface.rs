@@ -1,76 +1,76 @@
+use std::fmt::Display;
 use std::path::PathBuf;
 
 use crate::state;
 use crate::util;
 use crate::ARGS;
 
-use clap::arg_enum;
+use clap::ArgEnum;
+use clap::Parser;
 use regex::Regex;
-pub use structopt::StructOpt;
 
-#[derive(StructOpt, Debug)]
-#[structopt(setting(clap::AppSettings::ColoredHelp))]
-#[structopt(name = "videoconverter")]
-pub struct Opt {
+#[derive(Parser, Debug)]
+#[clap(name = "videoconverter", version, author)]
+pub struct Args {
     /// Keep all streams, regardless of language metadata.
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub all_streams: bool,
 
     /// Specify a CRF value to be passed to libx264
-    #[structopt(long, default_value = "20")]
+    #[clap(long, default_value = "20")]
     pub crf: u8,
 
     /// Specify a crop filter. These are of the format `crop=height:width:x:y`
-    #[structopt(long, parse(try_from_str = parse_crop_filter))]
+    #[clap(long, parse(try_from_str = parse_crop_filter))]
     pub crop: Option<String>,
 
     /// Force deinterlacing of video
-    #[structopt(short = "-d", long, conflicts_with = "no-deinterlace")]
+    #[clap(short = 'd', long, conflicts_with = "no-deinterlace")]
     pub force_deinterlace: bool,
 
     /// Disable automatic deinterlacing of video
-    #[structopt(short = "-D", long, conflicts_with = "force-deinterlace")]
+    #[clap(short = 'D', long, conflicts_with = "force-deinterlace")]
     pub no_deinterlace: bool,
 
     /// Force reencoding of video
-    #[structopt(long = "force-reencode")]
+    #[clap(long = "force-reencode")]
     pub force_reencode_video: bool,
 
     /// Specify encoder to use.
-    #[structopt(short, long, default_value = "Libx264", case_insensitive=true, possible_values = &Encoder::variants())]
-    pub encoder: Encoder,
+    #[clap(short, long, default_value = "Libx264", ignore_case = true, arg_enum)]
+    pub encoder: VideoEncoder,
 
     /// Specify encoder preset
-    #[structopt(long, default_value = "Slow", case_insensitive=true, possible_values = &Preset::variants())]
-    pub preset: Preset,
+    #[clap(long, default_value = "Slow", ignore_case = true, arg_enum)]
+    pub preset: VideoEncoderPreset,
 
     /// Disable hardware-accelerated decoding
-    #[structopt(long)]
+    #[clap(long)]
     pub no_hwaccel: bool,
 
     /// Do not actually perform the conversion
-    #[structopt(short, long)]
+    #[clap(short, long)]
     pub simulate: bool,
 
     /// Specify libx264 tune. Has no effect with Nvenc.
-    #[structopt(short, long, possible_values = &Libx264Tune::variants(), case_insensitive=true)]
+    #[clap(short, long, ignore_case = true, arg_enum)]
     pub tune: Option<Libx264Tune>,
 
     /// The path to operate on
-    #[structopt(default_value = ".")]
+    #[clap(default_value = ".")]
     pub path: std::path::PathBuf,
 
     /// Enables renaming of files to TV show format
-    #[structopt(long, short = "-T")]
+    #[clap(long, short = 'T')]
     pub tv_mode: bool,
 
     /// The path for the statefile
-    #[structopt(long, default_value = "/tmp/videoconverter.state")]
+    #[clap(long, default_value = "/tmp/videoconverter.state")]
     pub statefile: PathBuf,
 
-    /// Spawn each ffmpeg command concurrently. Currently doesn't kill child processes properly,
-    /// and so cannot be safely interrupted with, e.g. Ctrl-C.
-    #[structopt(short, long)]
+    /// Spawn each ffmpeg command concurrently. WARNING: Currently doesn't kill child processes 
+    /// properly, and so cannot be safely interrupted with, e.g. Ctrl-C.
+    #[clap(short, long)]
     pub parallel: bool,
 }
 
@@ -83,42 +83,54 @@ fn parse_crop_filter(input: &str) -> Result<String, String> {
     Ok(input.to_owned())
 }
 
-arg_enum! {
-    #[derive(Debug)]
-    pub enum Encoder {
-        Libx264,
-        Libx265,
-        Nvenc,
+#[derive(Debug, ArgEnum, Clone)]
+pub enum VideoEncoder {
+    Libx264,
+    Libx265,
+    Nvenc,
+}
+
+impl Display for VideoEncoder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
-arg_enum! {
-    #[derive(Debug)]
-    pub enum Preset {
-        Ultrafast,
-        Superfast,
-        Veryfast,
-        Faster,
-        Fast,
-        Medium,
-        Slow,
-        Slower,
-        Veryslow,
-        Placebo,
+#[derive(Debug, ArgEnum, Clone)]
+pub enum VideoEncoderPreset {
+    Ultrafast,
+    Superfast,
+    Veryfast,
+    Faster,
+    Fast,
+    Medium,
+    Slow,
+    Slower,
+    Veryslow,
+    Placebo,
+}
+
+impl Display for VideoEncoderPreset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
-arg_enum! {
-    #[derive(Debug)]
-    pub enum Libx264Tune {
-        Film,
-        Animation,
-        Grain,
-        StillImage,
-        PSNR,
-        SSIM,
-        FastDecode,
-        ZeroLatency,
+#[derive(Debug, ArgEnum, Clone)]
+pub enum Libx264Tune {
+    Film,
+    Animation,
+    Grain,
+    StillImage,
+    Psnr,
+    Ssim,
+    FastDecode,
+    ZeroLatency,
+}
+
+impl Display for Libx264Tune {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 

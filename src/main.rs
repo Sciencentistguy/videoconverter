@@ -12,10 +12,10 @@ mod util;
 use ffmpeg::codec;
 use frontend::StreamMappings;
 use once_cell::sync::Lazy;
-use structopt::StructOpt;
+use clap::Parser;
 use tracing::*;
 
-static ARGS: Lazy<interface::Opt> = Lazy::new(interface::Opt::from_args);
+static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);
 
 const EXEMPT_FILE_EXTENSIONS: [&str; 11] = [
     "clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt",
@@ -181,7 +181,7 @@ fn log_mappings(mappings: &StreamMappings, codecs: &HashMap<usize, Option<codec:
 }
 
 fn validate_args() {
-    if matches!(ARGS.encoder, interface::Encoder::Nvenc) {
+    if matches!(ARGS.encoder, interface::VideoEncoder::Nvenc) {
         if ARGS.no_hwaccel {
             eprintln!("Hardware acceleration cannot be disabled when using nvenc");
             std::process::exit(1);

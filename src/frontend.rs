@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::mem;
 
-use crate::interface::Encoder;
+use crate::interface::VideoEncoder;
 use crate::ARGS;
 
 pub use ffmpeg::codec;
@@ -285,9 +285,9 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
                     _ => (
                         index,
                         Some(match ARGS.encoder {
-                            Encoder::Libx264 => H264,
-                            Encoder::Libx265 => HEVC,
-                            Encoder::Nvenc => HEVC,
+                            VideoEncoder::Libx264 => H264,
+                            VideoEncoder::Libx265 => HEVC,
+                            VideoEncoder::Nvenc => HEVC,
                         }),
                     ),
                 },
