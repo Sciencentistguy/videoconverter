@@ -215,24 +215,28 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             .audio
             .iter()
             .enumerate()
-            .find(|(_, stream)| {
-                dbg!(stream.as_audio()).and_then(|x| x.lang.as_deref()) == Some(&lang)
-            })
-            .unwrap_or_else(|| {
-                panic!("Stream with language {lang} could not be found. Has it been discarded?")
-            })
-            .0;
-
-        for stream_idx in 0..mappings.audio.len() {
-            if stream_idx == target_stream_idx {
-                continue;
+            .find(|(_, stream)| stream.as_audio().and_then(|x| x.lang.as_deref()) == Some(&lang))
+            .map(|x| x.0);
+        match target_stream_idx {
+            None => {
+                error!(
+                    filename = ?input_path.as_ref(),
+                    "Stream with language {lang} could not be found. Has it been discarded?"
+                );
             }
-            command.arg(format!("-disposition:a:{}", stream_idx));
-            command.arg("0");
-        }
+            Some(target_stream_idx) => {
+                for stream_idx in 0..mappings.audio.len() {
+                    if stream_idx == target_stream_idx {
+                        continue;
+                    }
+                    command.arg(format!("-disposition:a:{}", stream_idx));
+                    command.arg("0");
+                }
 
-        command.arg(format!("-disposition:a:{}", target_stream_idx));
-        command.arg("default");
+                command.arg(format!("-disposition:a:{}", target_stream_idx));
+                command.arg("default");
+            }
+        }
     }
 
     for stream in mappings.iter() {
