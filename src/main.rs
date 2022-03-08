@@ -9,10 +9,10 @@ mod interface;
 mod state;
 mod util;
 
+use clap::Parser;
 use ffmpeg::codec;
 use frontend::StreamMappings;
 use once_cell::sync::Lazy;
-use clap::Parser;
 use tracing::*;
 
 static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);

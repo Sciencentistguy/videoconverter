@@ -68,7 +68,7 @@ pub struct Args {
     #[clap(long, default_value = "/tmp/videoconverter.state")]
     pub statefile: PathBuf,
 
-    /// Spawn each ffmpeg command concurrently. WARNING: Currently doesn't kill child processes 
+    /// Spawn each ffmpeg command concurrently. WARNING: Currently doesn't kill child processes
     /// properly, and so cannot be safely interrupted with, e.g. Ctrl-C.
     #[clap(short, long)]
     pub parallel: bool,

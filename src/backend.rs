@@ -5,8 +5,8 @@ use std::process::Command;
 
 use crate::frontend::Stream;
 use crate::frontend::StreamMappings;
-use crate::interface::VideoEncoder;
 use crate::interface::TVOptions;
+use crate::interface::VideoEncoder;
 use crate::ARGS;
 
 use ffmpeg::codec;
