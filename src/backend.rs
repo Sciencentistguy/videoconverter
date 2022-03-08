@@ -210,6 +210,31 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         generate_codec_args(&mut command, 's', stream.index(), out_index);
     }
 
+    if let Some(lang) = &ARGS.default_audio_language {
+        let target_stream_idx = mappings
+            .audio
+            .iter()
+            .enumerate()
+            .find(|(_, stream)| {
+                dbg!(stream.as_audio()).and_then(|x| x.lang.as_deref()) == Some(&lang)
+            })
+            .unwrap_or_else(|| {
+                panic!("Stream with language {lang} could not be found. Has it been discarded?")
+            })
+            .0;
+
+        for stream_idx in 0..mappings.audio.len() {
+            if stream_idx == target_stream_idx {
+                continue;
+            }
+            command.arg(format!("-disposition:a:{}", stream_idx));
+            command.arg("0");
+        }
+
+        command.arg(format!("-disposition:a:{}", target_stream_idx));
+        command.arg("default");
+    }
+
     for stream in mappings.iter() {
         command.arg("-map");
         command.arg(format!("0:{}", stream.index()));

@@ -69,6 +69,14 @@ impl Stream {
             Stream::Subtitle(x) => x.codec,
         }
     }
+
+    pub fn as_audio(&self) -> Option<&Audio> {
+        if let Self::Audio(v) = self {
+            Some(v)
+        } else {
+            None
+        }
+    }
 }
 
 impl StreamMappings {

@@ -72,6 +72,11 @@ pub struct Args {
     /// properly, and so cannot be safely interrupted with, e.g. Ctrl-C.
     #[clap(short, long)]
     pub parallel: bool,
+
+    /// Sets the default language to the first stream with the given language code. Will panic if
+    /// no such stream can be found.
+    #[clap(long, value_name = "language")]
+    pub default_audio_language: Option<String>
 }
 
 fn parse_crop_filter(input: &str) -> Result<String, String> {
