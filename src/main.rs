@@ -14,6 +14,7 @@ use ffmpeg::codec;
 use frontend::StreamMappings;
 use once_cell::sync::Lazy;
 use tracing::*;
+use tracing_subscriber::EnvFilter;
 
 static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);
 
@@ -37,7 +38,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::set_var("RUST_LOG", "videoconverter=info");
     }
 
-    tracing_subscriber::fmt().pretty().init();
+    tracing_subscriber::fmt()
+        .pretty()
+        .with_env_filter(EnvFilter::from_default_env())
+        .init();
 
     validate_args();
 
