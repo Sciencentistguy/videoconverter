@@ -1,35 +1,29 @@
-use std::io::stdin;
-use std::io::stdout;
-use std::io::Write;
+use question::{Answer, Question};
 
-pub fn prompt(prompt: &str) -> std::io::Result<String> {
-    let mut buf = String::new();
-    print!("{}: ", prompt);
-
-    stdout().lock().flush()?;
-    stdin().read_line(&mut buf)?;
-    buf.truncate(buf.trim_end().len());
-    Ok(buf)
+pub fn prompt(prompt: &str) -> String {
+    loop {
+        match Question::new(prompt).ask() {
+            Some(Answer::RESPONSE(s)) if s.is_empty() => continue,
+            Some(Answer::RESPONSE(s)) => break s,
+            Some(_) => unreachable!("Not a yes/no question"),
+            _ => unreachable!("Question::ask() should never return None"),
+        }
+    }
 }
 
-pub fn confirm(prompt: &str, default: bool) -> std::io::Result<bool> {
-    let mut buf = String::new();
-    loop {
-        if default {
-            print!("{} (Y/n) ", prompt);
-        } else {
-            print!("{} (y/N) ", prompt);
-        }
+pub fn confirm(prompt: &str, default: Option<question::Answer>) -> bool {
+    let mut question = Question::new(prompt);
+    question.yes_no().show_defaults();
 
-        stdout().lock().flush()?;
-        stdin().read_line(&mut buf)?;
-        buf.make_ascii_lowercase();
+    if let Some(default) = default {
+        question.default(default);
+    } else {
+        question.until_acceptable();
+    }
 
-        match &*(buf.trim_end()) {
-            "y" | "yes" => return Ok(true),
-            "n" | "no" => return Ok(false),
-            "" => return Ok(default),
-            _ => println!("Invalid response."),
-        }
+    match question.confirm() {
+        Answer::YES => true,
+        Answer::NO => false,
+        Answer::RESPONSE(x) => unreachable!("Yes/No Question shouldn't return RESPONSE: `{x}`"),
     }
 }

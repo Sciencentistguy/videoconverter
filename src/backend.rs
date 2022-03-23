@@ -215,7 +215,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             .audio
             .iter()
             .enumerate()
-            .find(|(_, stream)| stream.as_audio().and_then(|x| x.lang.as_deref()) == Some(&lang))
+            .find(|(_, stream)| stream.as_audio().and_then(|x| x.lang.as_deref()) == Some(lang))
             .map(|x| x.0);
         match target_stream_idx {
             None => {

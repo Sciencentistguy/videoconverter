@@ -7,6 +7,7 @@ use crate::ARGS;
 
 use clap::ArgEnum;
 use clap::Parser;
+use question::Answer;
 use regex::Regex;
 
 #[derive(Parser, Debug)]
@@ -73,9 +74,9 @@ pub struct Args {
     #[clap(short, long)]
     pub parallel: bool,
 
-    /// Sets the default language to the first stream with the given language code. 
+    /// Sets the default language to the first stream with the given language code.
     #[clap(long, value_name = "language")]
-    pub default_audio_language: Option<String>
+    pub default_audio_language: Option<String>,
 }
 
 fn parse_crop_filter(input: &str) -> Result<String, String> {
@@ -146,8 +147,7 @@ pub struct TVOptions {
 }
 
 pub fn get_tv_options() -> Option<TVOptions> {
-    let enabled =
-        ARGS.tv_mode || util::confirm("TV Show Mode", false).expect("failed to get user input");
+    let enabled = ARGS.tv_mode || util::confirm("TV Show Mode", Some(Answer::NO));
     if !enabled {
         return None;
     }
@@ -158,9 +158,8 @@ pub fn get_tv_options() -> Option<TVOptions> {
     if let Some(ref mut previous_state) = previous_state {
         let use_old_value = util::confirm(
             &format!("Use previous title? ({})", previous_state.title),
-            false,
-        )
-        .expect("failed to get user input");
+            None,
+        );
 
         if use_old_value {
             title = std::mem::take(&mut previous_state.title);
@@ -169,8 +168,7 @@ pub fn get_tv_options() -> Option<TVOptions> {
 
     if title.is_empty() {
         title = loop {
-            let response = util::prompt("Please enter the title of the TV show")
-                .expect("failed to get user input");
+            let response = util::prompt("Please enter the title of the TV show");
             if !response.is_empty() {
                 break response;
             }
@@ -180,8 +178,10 @@ pub fn get_tv_options() -> Option<TVOptions> {
     let mut season = None;
 
     if let Some(previous_state) = previous_state {
-        print!("Use previous season? ({})", previous_state.season);
-        let use_old_value = util::confirm("", false).expect("failed to get user input");
+        let use_old_value = util::confirm(
+            &format!("Use previous season? ({})", previous_state.season),
+            None,
+        );
 
         if use_old_value {
             season = Some(previous_state.season);
@@ -190,19 +190,19 @@ pub fn get_tv_options() -> Option<TVOptions> {
 
     if season.is_none() {
         season = loop {
-            if let Ok(x) = util::prompt("Enter the season index of the tv show")
-                .expect("failed to get user input")
-                .parse::<usize>()
-            {
-                break Some(x);
+            match util::prompt("Enter the season index of the tv show").parse::<usize>() {
+                Ok(x) => break Some(x),
+                Err(_) => {
+                    println!("Invalid response. Please try again.");
+                    continue;
+                }
             }
         }
     }
 
     let episode = loop {
-        if let Ok(x) = util::prompt("Enter the index of the first episode in this directory")
-            .expect("failed to get user input")
-            .parse::<usize>()
+        if let Ok(x) =
+            util::prompt("Enter the index of the first episode in this directory").parse::<usize>()
         {
             break x;
         }

@@ -341,6 +341,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "question"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acbb3ede7a8f9a8ab89e714637f2cf40001b58f21340d4242b2f11533e65fa8d"
+
+[[package]]
 name = "quote"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -531,6 +537,7 @@ dependencies = [
  "ffmpeg-sys-next",
  "itertools",
  "once_cell",
+ "question",
  "regex",
  "tracing",
  "tracing-subscriber",
