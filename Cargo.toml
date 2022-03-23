@@ -1,6 +1,6 @@
 [package]
 name = "videoconverter"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Jamie Quigley <jamie@quigley.xyz>"]
 edition = "2021"
 
