@@ -17,9 +17,18 @@ use tracing::*;
 
 static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);
 
-const EXEMPT_FILE_EXTENSIONS: [&str; 11] = [
-    "clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt",
-];
+static INPUT_FILE_EXTENSIONS: Lazy<Vec<String>> = Lazy::new(|| {
+    use ffmpeg::format::format::Format;
+    ffmpeg_next::format::format::list()
+        .filter(|x| matches!(x, Format::Input(_)))
+        .flat_map(|x| {
+            x.extensions()
+                .into_iter()
+                .map(|y| y.to_owned())
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>()
+});
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
@@ -35,10 +44,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!(?ARGS);
 
     // Shut libav* up
-    // Safety: Calling c function, modifying global state
-    unsafe {
-        ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL);
-    }
+    unsafe { ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL) };
 
     let mut tv_options = interface::get_tv_options();
 
@@ -59,25 +65,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .filter(|path| !path.is_dir()) // Remove directories
             .filter(|path| {
                 // Remove files that start with '.'
-                !path
-                    .file_name()
-                    .map(|filename| filename.as_bytes().starts_with(b"."))
-                    .unwrap_or(true) // Remove files that have no filename (?)
+                path.file_name()
+                    .map(|filename| !filename.as_bytes().starts_with(b"."))
+                    .unwrap_or(false) // Remove files that have no filename (?)
             })
             .filter(|path| {
-                // Remove files with extensions that are exempt
-                let file_extension = match path.extension().and_then(|x| x.to_str()) {
-                    Some(x) => x,
-                    None => {
-                        // Remove filles with no extension
-                        return false;
-                    }
-                };
-                // Remove files of the form `*.r00`, `*.r01`, etc
-                let is_rar_segment = file_extension.starts_with('r')
-                    && file_extension[1..].chars().all(|c| c.is_digit(10));
-
-                !(EXEMPT_FILE_EXTENSIONS.contains(&file_extension) || is_rar_segment)
+                // Only consider files that ffmpeg can actually take as input
+                match path.extension().and_then(|x| x.to_str()) {
+                    Some(file_extension) => INPUT_FILE_EXTENSIONS
+                        .iter()
+                        .any(|ext| ext.as_str() == file_extension),
+                    None => false,
+                }
             })
             .collect();
         v.sort_unstable();
