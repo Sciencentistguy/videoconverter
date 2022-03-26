@@ -7,3 +7,5 @@ test*
 # Added by cargo
 
 /target
+
+result

@@ -13,6 +13,8 @@ use ffmpeg::codec;
 use itertools::Itertools;
 use tracing::*;
 
+const FFMPEG_BIN_PATH: &str = "ffmpeg";
+
 pub fn generate_output_filename<P: AsRef<Path>>(path: P, tv_options: &Option<TVOptions>) -> String {
     let path = path.as_ref();
     if let Some(tv_options) = tv_options {
@@ -57,7 +59,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     mappings: StreamMappings,
     target_codecs: HashMap<usize, Option<codec::Id>>,
 ) -> std::process::Command {
-    let mut command = Command::new("ffmpeg");
+    let mut command = Command::new(FFMPEG_BIN_PATH);
     command.arg("-hide_banner"); // Remove gpl banner
 
     if !ARGS.simulate && output_path.as_ref().exists() {

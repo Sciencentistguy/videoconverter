@@ -1,10 +1,10 @@
-# VideoConverter
+# videoconverter
 
 ## Installation
 
-Install with `cargo install --git https://github.com/Sciencentistguy/videoconverter.git`
+The recommended installation method is with nix. This repository is a flake, and a `default.nix` is provided for flexibility.
 
-There is also a `PKGBUILD` provided.
+Alternatively, `cargo install` should work provided you have `ffmpeg` installed in a way that `pkg-config` can see.
 
 ## Usage
 
@@ -43,14 +43,6 @@ The program will analyse each file, and convert audio and video streams appropri
 If there are English audio and subtitle streams, then other languages' streams will be discarded. This can be overridden with `--all-streams`.
 
 If the file contains more than one video stream, only the first will be kept. If it contains zero video streams, the program will panic.
-
-## Info
-
-This program uses `libav*` from the [ffmpeg](https://ffmpeg.org/) project to analyse the input files. It then constructs a command for `ffmpeg` to convert the files, and then runs it.
-
-## TODO
-
-- Write a backend that uses `libav*` directly.
 
 ---
 
