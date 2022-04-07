@@ -76,6 +76,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .filter(|path| {
                 // Only consider files that ffmpeg can actually take as input
                 match path.extension().and_then(|x| x.to_str()) {
+                    Some("nfo") => false,
                     Some(file_extension) => INPUT_FILE_EXTENSIONS
                         .iter()
                         .any(|ext| ext.as_str() == file_extension),
