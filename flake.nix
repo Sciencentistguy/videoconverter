@@ -27,13 +27,12 @@
           inherit system;
         };
         inherit (pkgs) lib rustPlatform;
-      in {
-        packages.default = let
-          ffmpeg-fdk = pkgs.ffmpeg-full.override {
-            nonfreeLicensing = true;
-            fdkaacExtlib = true;
-          };
-        in
+        videoconverter = {
+          rustPlatform,
+          lib,
+          pkg-config,
+          ffmpeg,
+        }:
           rustPlatform.buildRustPackage {
             pname = "videoconverter";
             version = "0.2.1";
@@ -42,20 +41,39 @@
             cargoLock.lockFile = ./Cargo.lock;
 
             prePatch = ''
-              substituteInPlace src/backend.rs --replace 'const FFMPEG_BIN_PATH: &str = "ffmpeg";' 'const FFMPEG_BIN_PATH: &str = "${ffmpeg-fdk}/bin/ffmpeg";'
+              substituteInPlace src/backend.rs --replace 'const FFMPEG_BIN_PATH: &str = "ffmpeg";' 'const FFMPEG_BIN_PATH: &str = "${ffmpeg}/bin/ffmpeg";'
             '';
 
-            nativeBuildInputs = with pkgs; [
+            nativeBuildInputs = [
               pkg-config
               rustPlatform.bindgenHook
-              clippy
             ];
 
             buildInputs = [
-              ffmpeg-fdk
+              ffmpeg
             ];
-
-            RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
+            meta = with lib; {
+              license = licenses.mpl20;
+              homepage = "https://github.com/Sciencentistguy/videoconverter";
+              platforms = ffmpeg.meta.platforms;
+            };
           };
+      in {
+        packages.default = pkgs.callPackage videoconverter {
+          ffmpeg = pkgs.ffmpeg-full.override {
+            nonfreeLicensing = true;
+            fdkaacExtlib = true;
+          };
+        };
+        devShells.default = self.packages.${system}.default.overrideAttrs (super: {
+          nativeBuildInputs = with pkgs;
+            super.nativeBuildInputs
+            ++ [
+              clippy
+              rustfmt
+              cargo-edit
+            ];
+          RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
+        });
       });
 }
