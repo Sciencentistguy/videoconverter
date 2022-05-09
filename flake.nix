@@ -59,12 +59,15 @@
             };
           };
       in {
-        packages.default = pkgs.callPackage videoconverter {
+        packages.videoconverter = pkgs.callPackage videoconverter {
           ffmpeg = pkgs.ffmpeg-full.override {
             nonfreeLicensing = true;
             fdkaacExtlib = true;
           };
         };
+
+        packages.default = self.packages.${system}.videoconverter;
+
         devShells.default = self.packages.${system}.default.overrideAttrs (super: {
           nativeBuildInputs = with pkgs;
             super.nativeBuildInputs
