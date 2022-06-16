@@ -30,7 +30,7 @@ pub struct Args {
     pub force_deinterlace: bool,
 
     /// Disable automatic deinterlacing of video
-    #[clap(short = 'D', long, conflicts_with = "force-deinterlace")]
+    #[clap(short = 'D', long)]
     pub no_deinterlace: bool,
 
     /// Force reencoding of video
@@ -213,4 +213,17 @@ pub fn get_tv_options() -> Option<TVOptions> {
         season: season.unwrap(),
         episode,
     })
+}
+
+pub fn validate_args(args: &Args) {
+    if matches!(args.encoder, VideoEncoder::Nvenc) {
+        if args.no_hwaccel {
+            eprintln!("Hardware acceleration cannot be disabled when using nvenc");
+            std::process::exit(1);
+        }
+        if args.tune.is_some() {
+            eprintln!("Libx264 tunes cannot be used with nvenc.");
+            std::process::exit(1);
+        }
+    }
 }

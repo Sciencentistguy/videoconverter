@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    validate_args();
+    interface::validate_args(&ARGS);
 
     debug!(?ARGS);
 
@@ -184,19 +184,3 @@ fn log_mappings(mappings: &StreamMappings, codecs: &HashMap<usize, Option<codec:
     }
 }
 
-fn validate_args() {
-    if matches!(ARGS.encoder, interface::VideoEncoder::Nvenc) {
-        if ARGS.no_hwaccel {
-            eprintln!("Hardware acceleration cannot be disabled when using nvenc");
-            std::process::exit(1);
-        }
-        if ARGS.tune.is_some() {
-            eprintln!("Libx264 tunes cannot be used with nvenc.");
-            std::process::exit(1);
-        }
-    }
-    if ARGS.force_deinterlace && ARGS.no_deinterlace {
-        eprintln!("The arguments `--force-deinterlace` and `--no-deinterlace` are incompatible.");
-        std::process::exit(1);
-    }
-}
