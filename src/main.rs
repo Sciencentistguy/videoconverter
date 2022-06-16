@@ -3,15 +3,15 @@ extern crate ffmpeg_next as ffmpeg;
 use std::collections::HashMap;
 use std::os::unix::prelude::OsStrExt;
 
-mod backend;
-mod frontend;
+mod ffmpeg_backend;
+mod input;
 mod interface;
 mod state;
 mod util;
 
 use clap::Parser;
 use ffmpeg::codec;
-use frontend::StreamMappings;
+use input::StreamMappings;
 use once_cell::sync::Lazy;
 use tracing::*;
 use tracing_subscriber::EnvFilter;
@@ -34,9 +34,9 @@ static INPUT_FILE_EXTENSIONS: Lazy<Vec<String>> = Lazy::new(|| {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
 
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "videoconverter=info");
-    }
+    // if std::env::var("RUST_LOG").is_err() {
+    // std::env::set_var("RUST_LOG", "videoconverter=info");
+    // }
 
     tracing_subscriber::fmt()
         .pretty()
@@ -105,17 +105,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!(dir = ?output_dir, "Created directory");
     }
 
-    for input_path in entries {
-        let output_filename = backend::generate_output_filename(&input_path, &tv_options);
+    for input_filepath in entries {
+        let output_filename =
+            ffmpeg_backend::generate_output_filename(&input_filepath, &tv_options);
         let output_path = if let Some(ref tv_options) = tv_options {
-            input_path
+            input_filepath
                 .parent()
-                .expect("Somehow the input_path was root")
+                .expect("input_filepath should have a parent")
                 .join(format!("Season {:02}", tv_options.season))
         } else {
-            input_path
+            input_filepath
                 .parent()
-                .expect("Somehow the input_path was root")
+                .expect("input_filepath should have a parent")
                 .join("newfiles")
         }
         .join(output_filename);
@@ -126,7 +127,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         info!(
             "Mapping '{}' --> '{}'",
-            input_path
+            input_filepath
                 .to_str()
                 .expect("Path contained invalid unicode."),
             output_path
@@ -134,16 +135,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .expect("Path contained invalid unicode.")
         );
 
-        let file = ffmpeg::format::input(&input_path)?;
+        let file = ffmpeg::format::input(&input_filepath)?;
 
-        let parsed = frontend::parse_stream_metadata(file);
-        let stream_mappings = frontend::get_stream_mappings(parsed);
-        let codec_mappings = frontend::get_codec_mapping(&stream_mappings);
+        let parsed = input::parse_stream_metadata(file);
+        let stream_mappings = input::get_stream_mappings(parsed);
+        let codec_mappings = input::get_codec_mapping(&stream_mappings);
 
         log_mappings(&stream_mappings, &codec_mappings);
 
-        let mut command = backend::generate_ffmpeg_command(
-            input_path,
+        let mut command = ffmpeg_backend::generate_ffmpeg_command(
+            input_filepath,
             output_path,
             stream_mappings,
             codec_mappings,
@@ -183,4 +184,3 @@ fn log_mappings(mappings: &StreamMappings, codecs: &HashMap<usize, Option<codec:
         );
     }
 }
-

@@ -79,10 +79,10 @@ pub struct Args {
     pub default_audio_language: Option<String>,
 }
 
-fn parse_crop_filter(input: &str) -> Result<String, String> {
+fn parse_crop_filter(input: &str) -> Result<String, &'static str> {
     let r = Regex::new(r"crop=\d\+:\d\+:\d\+:\d\+").unwrap();
     if !r.is_match(input) {
-        return Err("must be of the form `crop=height:width:x:y`".to_string());
+        return Err("must be of the form `crop=height:width:x:y`");
     }
     // TODO check that its a proper crop string
     Ok(input.to_owned())

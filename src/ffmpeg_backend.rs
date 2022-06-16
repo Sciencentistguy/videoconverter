@@ -3,8 +3,8 @@ use std::iter::Iterator;
 use std::path::Path;
 use std::process::Command;
 
-use crate::frontend::Stream;
-use crate::frontend::StreamMappings;
+use crate::input::Stream;
+use crate::input::StreamMappings;
 use crate::interface::TVOptions;
 use crate::interface::VideoEncoder;
 use crate::ARGS;
@@ -25,19 +25,19 @@ pub fn generate_output_filename<P: AsRef<Path>>(path: P, tv_options: &Option<TVO
     } else {
         let input_filename = path
             .file_name()
-            .expect("Input filename is None")
+            .expect("input_filepath should have a filename")
             .to_str()
             .unwrap();
         let input_ext = path
             .extension()
-            .expect("Input ext is None")
+            .expect("input_filepath should have an extension")
             .to_str()
             .unwrap();
         input_filename.replace(input_ext, "mkv")
     }
 }
 
-fn get_encoder(codec: codec::Id) -> &'static str {
+fn encoder_for(codec: codec::Id) -> &'static str {
     use codec::Id;
     match codec {
         Id::AAC => "libfdk_aac",
@@ -49,7 +49,10 @@ fn get_encoder(codec: codec::Id) -> &'static str {
             VideoEncoder::Nvenc => "hevc_nvenc",
         },
         Id::SSA => "ass",
-        _ => panic!("Invalid output codec '{:?}' passed to get_encoder.", codec),
+        _ => unreachable!(
+            "Unexpected output codec '{:?}' passed to get_encoder.",
+            codec
+        ),
     }
 }
 
@@ -98,7 +101,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             let codec = target_codecs[&index_in];
             command.arg(format!("-c:{}:{}", stream_type, index_out));
             if let Some(&codec) = codec.as_ref() {
-                command.arg(get_encoder(codec));
+                command.arg(encoder_for(codec));
             } else if mappings.video.iter().map(|x| x.index()).contains(&index_in)
                 && ARGS.force_reencode_video
             {
@@ -169,7 +172,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
 
         let should_deinterlace = matches!(
             video_stream.field_order,
-            crate::frontend::FieldOrder::Interlaced
+            crate::input::FieldOrder::Interlaced
         );
         let deinterlace = should_deinterlace && ARGS.no_deinterlace || ARGS.force_deinterlace;
 
