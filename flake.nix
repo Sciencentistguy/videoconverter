@@ -1,6 +1,5 @@
 {
   inputs = {
-    # github example, also supported gitlab:
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     flake-compat = {
@@ -20,7 +19,8 @@
       };
     }
     // flake-utils.lib.eachDefaultSystem (system:
-      # AFAICT I have to instantiate a nixpkgs here because of the unfree, even though it is le bad
+      # Instantiating a nixpkgs here as it needs to have `config.allowUnfree = true;`.
+      # Using https://github.com/numtide/nixpkgs-unfree caused opencv to build from source.
       let
         pkgs = import "${nixpkgs}" {
           config.allowUnfree = true;
@@ -40,8 +40,11 @@
 
             cargoLock.lockFile = ./Cargo.lock;
 
+            # Point to a nixpkgs ffmpeg rather than using the one on $PATH
             prePatch = ''
-              substituteInPlace src/backend.rs --replace 'const FFMPEG_BIN_PATH: &str = "ffmpeg";' 'const FFMPEG_BIN_PATH: &str = "${ffmpeg}/bin/ffmpeg";'
+              substituteInPlace src/backend.rs \
+                --replace 'const FFMPEG_BIN_PATH: &str = "ffmpeg";'\
+                          'const FFMPEG_BIN_PATH: &str = "${ffmpeg}/bin/ffmpeg";'
             '';
 
             nativeBuildInputs = [
@@ -52,6 +55,7 @@
             buildInputs = [
               ffmpeg
             ];
+
             meta = with lib; {
               license = licenses.mpl20;
               homepage = "https://github.com/Sciencentistguy/videoconverter";
