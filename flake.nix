@@ -42,7 +42,7 @@
 
             # Point to a nixpkgs ffmpeg rather than using the one on $PATH
             prePatch = ''
-              substituteInPlace src/backend.rs \
+              substituteInPlace src/ffmpeg_backend.rs \
                 --replace 'const FFMPEG_BIN_PATH: &str = "ffmpeg";'\
                           'const FFMPEG_BIN_PATH: &str = "${ffmpeg}/bin/ffmpeg";'
             '';
