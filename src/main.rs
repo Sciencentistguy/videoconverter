@@ -34,9 +34,9 @@ static INPUT_FILE_EXTENSIONS: Lazy<Vec<String>> = Lazy::new(|| {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
 
-    // if std::env::var("RUST_LOG").is_err() {
-    // std::env::set_var("RUST_LOG", "videoconverter=info");
-    // }
+    if std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "videoconverter=info");
+    }
 
     tracing_subscriber::fmt()
         .pretty()
@@ -63,7 +63,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     debug!(?tv_options);
 
-    let entries = {
+    let entries = if ARGS.path.is_file() {
+        vec![ARGS.path.clone()]
+    } else if ARGS.path.is_dir() {
         let mut v: Vec<_> = std::fs::read_dir(&ARGS.path)?
             .map(|entry| entry.unwrap().path())
             .filter(|path| !path.is_dir()) // Remove directories
@@ -86,6 +88,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .collect();
         v.sort_unstable();
         v
+    } else {
+        unreachable!("`path` must be a file or directory");
     };
 
     debug!(?entries);
