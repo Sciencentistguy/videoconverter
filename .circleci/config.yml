@@ -3,7 +3,7 @@
 version: 2.1
 
 jobs:
-  nix-build:
+  build:
     docker:
       - image: "nixos/nix"
     steps:
