@@ -2,16 +2,6 @@
 # See: https://circleci.com/docs/2.0/configuration-reference
 version: 2.1
 
-orbs:
-  rust: circleci/rust@1.6.0
-
-workflows:
-  rustup:
-    jobs:
-      - rust/lint-test-build:
-          release: true
-          version: "1.61.0"
-
 jobs:
   nix-build:
     docker:
