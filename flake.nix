@@ -69,6 +69,8 @@
             fdkaacExtlib = true;
           };
         };
+        # Assume that ffmpeg-full works and I don't need to build it in CI
+        packages.videoconverter-ci = pkgs.callPackage videoconverter {};
 
         packages.default = self.packages.${system}.videoconverter;
 
