@@ -34,7 +34,7 @@ static INPUT_FILE_EXTENSIONS: Lazy<Vec<String>> = Lazy::new(|| {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
 
-    if std::env::var("RUST_LOG").is_err() {
+    if ARGS.simulate || std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "videoconverter=info");
     }
 
