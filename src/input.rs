@@ -287,8 +287,12 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
         .iter()
         .map(|stream| {
             let index = stream.index();
+            if ARGS.copy_all {
+                return (index, None);
+            }
             match stream {
                 Stream::Video(video) => match video.codec {
+                    _ if ARGS.copy_video => (index, None),
                     HEVC | H264 if !ARGS.force_reencode_video => (index, None),
                     _ => (
                         index,

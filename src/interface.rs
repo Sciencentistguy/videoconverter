@@ -37,8 +37,16 @@ pub struct Args {
     #[clap(long = "force-reencode")]
     pub force_reencode_video: bool,
 
+    /// Disable reencoding of video
+    #[clap(long, conflicts_with_all = &["force-reencode-video", "force-deinterlace"])]
+    pub copy_video: bool,
+
+    /// Disable all reencoding. Implies `--copy-video`
+    #[clap(long, conflicts_with_all = &["force-reencode-video", "force-deinterlace"])]
+    pub copy_all: bool,
+
     /// Specify encoder to use.
-    #[clap(short, long, default_value = "Libx264", ignore_case = true, arg_enum)]
+    #[clap(short, long, default_value = "libx264", ignore_case = true, arg_enum)]
     pub encoder: VideoEncoder,
 
     /// Specify encoder preset
@@ -69,8 +77,8 @@ pub struct Args {
     #[clap(long, default_value = "/tmp/videoconverter.state")]
     pub statefile: PathBuf,
 
-    /// Spawn each ffmpeg command concurrently. WARNING: Currently doesn't kill child processes
-    /// properly, and so cannot be safely interrupted with, e.g. Ctrl-C.
+    /// Spawn each ffmpeg command concurrently. WARNING: Doesn't kill child processes properly,
+    /// and so cannot be safely interrupted with, e.g. Ctrl-C.
     #[clap(short, long)]
     pub parallel: bool,
 
@@ -168,7 +176,7 @@ pub fn get_tv_options() -> Option<TVOptions> {
 
     if title.is_empty() {
         title = loop {
-            let response = util::prompt("Please enter the title of the TV show");
+            let response = util::prompt("Please enter the title of the TV show:");
             if !response.is_empty() {
                 break response;
             }
@@ -190,7 +198,7 @@ pub fn get_tv_options() -> Option<TVOptions> {
 
     if season.is_none() {
         season = loop {
-            match util::prompt("Enter the season index of the tv show").parse::<usize>() {
+            match util::prompt("Enter the season index of the tv show:").parse::<usize>() {
                 Ok(x) => break Some(x),
                 Err(_) => {
                     println!("Invalid response. Please try again.");
@@ -202,7 +210,7 @@ pub fn get_tv_options() -> Option<TVOptions> {
 
     let episode = loop {
         if let Ok(x) =
-            util::prompt("Enter the index of the first episode in this directory").parse::<usize>()
+            util::prompt("Enter the index of the first episode in this directory:").parse::<usize>()
         {
             break x;
         }
