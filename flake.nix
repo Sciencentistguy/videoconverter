@@ -34,8 +34,7 @@
           ffmpeg,
         }:
           rustPlatform.buildRustPackage {
-            pname = "videoconverter";
-            version = "0.2.1";
+            name = "videoconverter";
             src = lib.cleanSource ./.;
 
             cargoLock.lockFile = ./Cargo.lock;
