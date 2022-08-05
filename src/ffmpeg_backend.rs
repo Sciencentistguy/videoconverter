@@ -3,6 +3,7 @@ use std::iter::Iterator;
 use std::path::Path;
 use std::process::Command;
 
+use crate::input::FieldOrder;
 use crate::input::Stream;
 use crate::input::StreamMappings;
 use crate::interface::TVOptions;
@@ -129,7 +130,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     const LIBFDK_AAC_FLAGS: &[&str] = &["-cutoff", "18000", "-vbr", "5"];
 
     if reencoding_video {
-        trace!("Reencoding video");
+        // Insert the encoder flags for the video stream
         match ARGS.encoder {
             VideoEncoder::Libx264 => {
                 command.arg("-crf");
@@ -149,11 +150,8 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
                 command.arg("-crf");
                 command.arg(ARGS.crf.to_string());
                 command.args(LIBX265_FLAGS);
-                if let Some(ref x) = ARGS.tune {
-                    warn!("Using libx264 tune with libx265");
-                    let s = x.to_string().to_lowercase();
-                    command.arg("-tune");
-                    command.arg(s);
+                if ARGS.tune.is_some() {
+                    warn!("Tune is not supported for libx265");
                 }
             }
             VideoEncoder::Nvenc => {
@@ -163,25 +161,22 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             }
         }
 
-        let mut preset = ARGS.preset.to_string();
-        preset.make_ascii_lowercase();
+        // Apply video encoder preset.
         command.arg("-preset");
-        command.arg(preset);
+        command.arg(ARGS.preset.to_string());
 
-        let mut filter_args: [Option<&str>; 2] = [None; 2];
+        // Whether to deinterlace the video.
+        let deinterlace = matches!(video_stream.field_order, FieldOrder::Interlaced)
+            && ARGS.no_deinterlace
+            || ARGS.force_deinterlace;
 
-        let should_deinterlace = matches!(
-            video_stream.field_order,
-            crate::input::FieldOrder::Interlaced
-        );
-        let deinterlace = should_deinterlace && ARGS.no_deinterlace || ARGS.force_deinterlace;
+        // Using an array instead of 2 variables so Iterator::join() can be used.
+        // filter_args[0] = crop_filter
+        // filter_args[1] = deinterlace_filter
+        let mut filter_args = [None; 2];
 
-        filter_args[0] = if let Some(ref filter) = ARGS.crop {
-            trace!(?filter, "Cropping video with filter");
-            ARGS.crop.as_deref()
-        } else {
-            None
-        };
+        // If a crop filter is set, use it.
+        filter_args[0] = ARGS.crop.as_deref();
 
         filter_args[1] = if deinterlace {
             trace!("Deinterlacing video");
@@ -204,11 +199,9 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         generate_codec_args(&mut command, 'a', stream.index(), out_index);
     }
 
-    if reencoding_audio {
-        trace!("Reencoding audio");
-        if target_codecs.values().contains(&Some(codec::Id::AAC)) {
-            command.args(LIBFDK_AAC_FLAGS);
-        }
+    if reencoding_audio && target_codecs.values().contains(&Some(codec::Id::AAC)) {
+        // Apply libfdk_aac flags if it is being used.
+        command.args(LIBFDK_AAC_FLAGS);
     }
 
     for (out_index, stream) in mappings.subtitle.iter().enumerate() {
@@ -216,13 +209,13 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     }
 
     if let Some(lang) = &ARGS.default_audio_language {
-        let target_stream_idx = mappings
+        match mappings
             .audio
             .iter()
             .enumerate()
             .find(|(_, stream)| stream.as_audio().and_then(|x| x.lang.as_deref()) == Some(lang))
-            .map(|x| x.0);
-        match target_stream_idx {
+            .map(|x| x.0)
+        {
             None => {
                 error!(
                     filename = ?input_path.as_ref(),
@@ -244,6 +237,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         }
     }
 
+    // Map each stream from the input file
     for stream in mappings.iter() {
         command.arg("-map");
         command.arg(format!("0:{}", stream.index()));

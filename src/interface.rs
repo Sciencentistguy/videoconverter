@@ -1,5 +1,7 @@
 use std::fmt::Display;
+use std::ops::Deref;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use crate::state;
 use crate::util;
@@ -22,8 +24,8 @@ pub struct Args {
     pub crf: u8,
 
     /// Specify a crop filter. These are of the format `crop=height:width:x:y`
-    #[clap(long, parse(try_from_str = parse_crop_filter))]
-    pub crop: Option<String>,
+    #[clap(long)]
+    pub crop: Option<CropFilter>,
 
     /// Force deinterlacing of video
     #[clap(short = 'd', long, conflicts_with = "no-deinterlace")]
@@ -50,7 +52,7 @@ pub struct Args {
     pub encoder: VideoEncoder,
 
     /// Specify encoder preset
-    #[clap(long, default_value = "Slow", ignore_case = true, arg_enum)]
+    #[clap(long, default_value = "slow", ignore_case = true, arg_enum)]
     pub preset: VideoEncoderPreset,
 
     /// Disable hardware-accelerated decoding
@@ -87,29 +89,40 @@ pub struct Args {
     pub default_audio_language: Option<String>,
 }
 
-fn parse_crop_filter(input: &str) -> Result<String, &'static str> {
-    let r = Regex::new(r"crop=\d\+:\d\+:\d\+:\d\+").unwrap();
-    if !r.is_match(input) {
-        return Err("must be of the form `crop=height:width:x:y`");
+#[derive(Debug)]
+pub struct CropFilter(pub String);
+
+impl Deref for CropFilter {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
-    // TODO check that its a proper crop string
-    Ok(input.to_owned())
 }
 
-#[derive(Debug, ArgEnum, Clone)]
+impl FromStr for CropFilter {
+    type Err = &'static str;
+
+    fn from_str(input: &str) -> Result<Self, Self::Err> {
+        let r = Regex::new(r"crop=\d\+:\d\+:\d\+:\d\+").unwrap();
+        if !r.is_match(input) {
+            return Err("Crop filter must be of the form `crop=height:width:x:y`");
+        }
+        // TODO check that its a proper crop string
+        Ok(Self(input.to_owned()))
+    }
+}
+
+#[derive(Debug, ArgEnum, Clone, strum::Display)]
+#[strum(serialize_all = "lowercase")]
 pub enum VideoEncoder {
     Libx264,
     Libx265,
     Nvenc,
 }
 
-impl Display for VideoEncoder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-#[derive(Debug, ArgEnum, Clone)]
+#[derive(Debug, ArgEnum, Clone, strum::Display)]
+#[strum(serialize_all = "lowercase")]
 pub enum VideoEncoderPreset {
     Ultrafast,
     Superfast,
@@ -123,13 +136,8 @@ pub enum VideoEncoderPreset {
     Placebo,
 }
 
-impl Display for VideoEncoderPreset {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-#[derive(Debug, ArgEnum, Clone)]
+#[derive(Debug, ArgEnum, Clone, strum::Display)]
+#[strum(serialize_all = "lowercase")]
 pub enum Libx264Tune {
     Film,
     Animation,
@@ -139,12 +147,6 @@ pub enum Libx264Tune {
     Ssim,
     FastDecode,
     ZeroLatency,
-}
-
-impl Display for Libx264Tune {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
-    }
 }
 
 #[derive(Debug)]
