@@ -13,6 +13,7 @@ use clap::Parser;
 use ffmpeg::codec;
 use input::StreamMappings;
 use once_cell::sync::Lazy;
+use question::Answer;
 use tracing::*;
 use tracing_subscriber::EnvFilter;
 
@@ -34,12 +35,7 @@ static INPUT_FILE_EXTENSIONS: Lazy<Vec<String>> = Lazy::new(|| {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
 
-    if ARGS.simulate || std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "videoconverter=info");
-    }
-
     tracing_subscriber::fmt()
-        .pretty()
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
@@ -109,6 +105,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!(dir = ?output_dir, "Created directory");
     }
 
+    let mut commands = Vec::with_capacity(entries.len());
+
     for input_filepath in entries {
         let output_filename =
             ffmpeg_backend::generate_output_filename(&input_filepath, &tv_options);
@@ -129,8 +127,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             tv_options.episode += 1;
         }
 
-        info!(
-            "Mapping '{}' --> '{}'",
+        let file = ffmpeg::format::input(&input_filepath)?;
+
+        let parsed = input::parse_stream_metadata(file);
+        let stream_mappings = input::get_stream_mappings(parsed);
+        let codec_mappings = input::get_codec_mapping(&stream_mappings);
+
+        let mappings = &stream_mappings;
+        let codecs = &codec_mappings;
+        println!(
+            "Input file '{}' --> output file '{}':",
             input_filepath
                 .to_str()
                 .expect("Path contained invalid unicode."),
@@ -138,16 +144,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .to_str()
                 .expect("Path contained invalid unicode.")
         );
+        for stream in mappings.iter() {
+            let index = stream.index();
+            let codec = codecs.get(&index).unwrap();
+            let oldcodec = stream.codec();
+            let newcodec = match codec {
+                None => &oldcodec,
+                Some(x) => x,
+            };
 
-        let file = ffmpeg::format::input(&input_filepath)?;
+            println!(
+                "Mapping stream {}: {:?} -> {:?}{}",
+                index,
+                oldcodec,
+                newcodec,
+                if codec.is_none() { " (copy)" } else { "" }
+            );
+        }
+        println!();
 
-        let parsed = input::parse_stream_metadata(file);
-        let stream_mappings = input::get_stream_mappings(parsed);
-        let codec_mappings = input::get_codec_mapping(&stream_mappings);
-
-        log_mappings(&stream_mappings, &codec_mappings);
-
-        let mut command = ffmpeg_backend::generate_ffmpeg_command(
+        let command = ffmpeg_backend::generate_ffmpeg_command(
             input_filepath,
             output_path,
             stream_mappings,
@@ -155,7 +171,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         info!(?command);
+        commands.push(command);
+    }
 
+    if !util::confirm("Continue?", Some(Answer::YES)) {
+        eprintln!("Aborting");
+        return Ok(());
+    }
+
+    for mut command in commands {
         if !ARGS.simulate {
             if ARGS.parallel {
                 command.spawn()?;
@@ -166,25 +190,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
-}
-
-#[inline]
-fn log_mappings(mappings: &StreamMappings, codecs: &HashMap<usize, Option<codec::Id>>) {
-    for stream in mappings.iter() {
-        let index = stream.index();
-        let codec = codecs.get(&index).unwrap();
-        let oldcodec = stream.codec();
-        let newcodec = match codec {
-            None => &oldcodec,
-            Some(x) => x,
-        };
-
-        info!(
-            "Mapping stream {}: {:?} -> {:?}{}",
-            index,
-            oldcodec,
-            newcodec,
-            if codec.is_none() { " (copy)" } else { "" }
-        );
-    }
 }
