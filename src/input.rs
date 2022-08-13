@@ -287,9 +287,6 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
         .iter()
         .map(|stream| {
             let index = stream.index();
-            if ARGS.copy_all {
-                return (index, None);
-            }
             match stream {
                 Stream::Video(video) => match video.codec {
                     _ if ARGS.copy_video => (index, None),
@@ -303,24 +300,34 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
                         }),
                     ),
                 },
-                Stream::Audio(audio) => match audio.codec {
-                    _ if ARGS.copy_audio => (index, None),
-                    FLAC | AAC => (index, None),
-                    TRUEHD => (index, Some(FLAC)),
-                    DTS if matches!(
-                        audio.profile,
-                        Some(codec::Profile::DTS(codec::profile::DTS::HD_MA))
-                    ) =>
-                    {
-                        (index, Some(FLAC))
+                Stream::Audio(audio) => {
+                    if !ARGS.reencode_audio {
+                        (index, None)
+                    } else {
+                        match audio.codec {
+                            FLAC | AAC => (index, None),
+                            TRUEHD => (index, Some(FLAC)),
+                            DTS if matches!(
+                                audio.profile,
+                                Some(codec::Profile::DTS(codec::profile::DTS::HD_MA))
+                            ) =>
+                            {
+                                (index, Some(FLAC))
+                            }
+                            _ => (index, Some(AAC)),
+                        }
                     }
-                    _ => (index, Some(AAC)),
-                },
-                Stream::Subtitle(subtitle) => match subtitle.codec {
-                    _ if ARGS.copy_subs => (index, None),
-                    HDMV_PGS_SUBTITLE | DVD_SUBTITLE => (index, None),
-                    _ => (index, Some(SSA)),
-                },
+                }
+                Stream::Subtitle(subtitle) => {
+                    if !ARGS.reencode_subs {
+                        (index, None)
+                    } else {
+                        match subtitle.codec {
+                            HDMV_PGS_SUBTITLE | DVD_SUBTITLE => (index, None),
+                            _ => (index, Some(SSA)),
+                        }
+                    }
+                }
             }
         })
         .collect()

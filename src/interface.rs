@@ -42,17 +42,13 @@ pub struct Args {
     #[clap(long, conflicts_with_all = &["force-reencode-video", "force-deinterlace"])]
     pub copy_video: bool,
 
-    /// Disable reencoding of audio
+    /// Enable reencoding of audio
     #[clap(long)]
-    pub copy_audio: bool,
+    pub reencode_audio: bool,
 
-    /// Disable reencoding of subtitles
+    /// Enable reencoding of subtitles
     #[clap(long)]
-    pub copy_subs: bool,
-
-    /// Disable all reencoding. Implies `--copy-video`, `--copy-audio`, and `--copy-subs`
-    #[clap(short = 'c', long, conflicts_with_all = &["force-reencode-video", "force-deinterlace"])]
-    pub copy_all: bool,
+    pub reencode_subs: bool,
 
     /// Specify encoder to use.
     #[clap(short, long, default_value = "libx264", ignore_case = true, arg_enum)]
