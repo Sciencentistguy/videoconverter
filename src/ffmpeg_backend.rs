@@ -171,26 +171,26 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             || ARGS.force_deinterlace;
 
         // Using an array instead of 2 variables so Iterator::join() can be used.
-        let mut filter_args = [None; 2];
-        let [crop_filter, deinterlace_filter] = &mut filter_args;
+        // let mut filter_args = [None; 2];
+        // let [crop_filter, deinterlace_filter] = &mut filter_args;
 
         // If a crop filter is set, use it.
-        *crop_filter = ARGS.crop.as_deref();
+        let crop_filter = ARGS.crop.as_ref().map(|x| x.to_string());
 
-        *deinterlace_filter = if deinterlace {
+        let deinterlace_filter = if deinterlace {
+            const WEIGTHS_FILE: &str = concat!(env!("HOME"), ".ffmpeg/nnedi3_weights");
+            const NNEDI_FILTER: &str = "idet,fieldmatch=mode=pc_n_ub:combmatch=full:combpel=70,nnedi=deint=interlaced:pscrn=none:threads=32:weights=";
+
             trace!("Deinterlacing video");
-            if matches!(ARGS.encoder, VideoEncoder::Nvenc) {
-                Some("hwupload_cuda,yadif_cuda")
-            } else {
-                Some("yadif")
-            }
+            Some(format!("{}{}", NNEDI_FILTER, WEIGTHS_FILE))
         } else {
             None
         };
 
-        if filter_args.iter().any(Option::is_some) {
+        let it = std::iter::once(crop_filter).chain(std::iter::once(deinterlace_filter));
+        if it.clone().any(|x| x.is_some()) {
             command.arg("-filter:v");
-            command.arg(filter_args.iter().flatten().join(","));
+            command.arg(it.flatten().join(","));
         }
     }
 

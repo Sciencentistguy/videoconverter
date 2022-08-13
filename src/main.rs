@@ -1,6 +1,5 @@
 extern crate ffmpeg_next as ffmpeg;
 
-use std::collections::HashMap;
 use std::os::unix::prelude::OsStrExt;
 
 mod ffmpeg_backend;
@@ -10,8 +9,6 @@ mod state;
 mod util;
 
 use clap::Parser;
-use ffmpeg::codec;
-use input::StreamMappings;
 use once_cell::sync::Lazy;
 use question::Answer;
 use tracing::*;
@@ -175,6 +172,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         info!(?command);
         commands.push(command);
+    }
+
+    if ARGS.simulate {
+        eprintln!("Simulate mode; not executing commands");
+        return Ok(());
     }
 
     if !util::confirm("Continue?", Some(Answer::YES)) {
