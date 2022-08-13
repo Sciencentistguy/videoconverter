@@ -171,14 +171,13 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             || ARGS.force_deinterlace;
 
         // Using an array instead of 2 variables so Iterator::join() can be used.
-        // filter_args[0] = crop_filter
-        // filter_args[1] = deinterlace_filter
         let mut filter_args = [None; 2];
+        let [crop_filter, deinterlace_filter] = &mut filter_args;
 
         // If a crop filter is set, use it.
-        filter_args[0] = ARGS.crop.as_deref();
+        *crop_filter = ARGS.crop.as_deref();
 
-        filter_args[1] = if deinterlace {
+        *deinterlace_filter = if deinterlace {
             trace!("Deinterlacing video");
             if matches!(ARGS.encoder, VideoEncoder::Nvenc) {
                 Some("hwupload_cuda,yadif_cuda")

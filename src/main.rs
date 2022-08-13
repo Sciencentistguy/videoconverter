@@ -74,11 +74,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .filter(|path| {
                 // Only consider files that ffmpeg can actually take as input
                 match path.extension().and_then(|x| x.to_str()) {
-                    Some("nfo") => false,
+                    // Special case for `.nfo` and `.txt`: these are never video files.
+                    Some("nfo" | "txt") => false,
+                    // If there is no extension; assume it is not a video file - ffmpeg would get
+                    // confused anyway.
+                    None => false,
                     Some(file_extension) => INPUT_FILE_EXTENSIONS
                         .iter()
                         .any(|ext| ext.as_str() == file_extension),
-                    None => false,
                 }
             })
             .collect();
