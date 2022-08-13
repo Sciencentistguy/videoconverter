@@ -65,7 +65,7 @@ fn validate_state(statefile: &[String]) -> bool {
     if statefile
         .iter()
         .skip(1)
-        .any(|l| l.chars().any(|x| !x.is_digit(10)))
+        .any(|l| l.chars().any(|x| !x.is_ascii_digit()))
     {
         return false;
     }

@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -43,8 +42,16 @@ pub struct Args {
     #[clap(long, conflicts_with_all = &["force-reencode-video", "force-deinterlace"])]
     pub copy_video: bool,
 
-    /// Disable all reencoding. Implies `--copy-video`
-    #[clap(long, conflicts_with_all = &["force-reencode-video", "force-deinterlace"])]
+    /// Disable reencoding of audio
+    #[clap(long)]
+    pub copy_audio: bool,
+
+    /// Disable reencoding of subtitles
+    #[clap(long)]
+    pub copy_subs: bool,
+
+    /// Disable all reencoding. Implies `--copy-video`, `--copy-audio`, and `--copy-subs`
+    #[clap(short = 'c', long, conflicts_with_all = &["force-reencode-video", "force-deinterlace"])]
     pub copy_all: bool,
 
     /// Specify encoder to use.

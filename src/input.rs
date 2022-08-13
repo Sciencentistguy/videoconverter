@@ -304,6 +304,7 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
                     ),
                 },
                 Stream::Audio(audio) => match audio.codec {
+                    _ if ARGS.copy_audio => (index, None),
                     FLAC | AAC => (index, None),
                     TRUEHD => (index, Some(FLAC)),
                     DTS if matches!(
@@ -316,6 +317,7 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
                     _ => (index, Some(AAC)),
                 },
                 Stream::Subtitle(subtitle) => match subtitle.codec {
+                    _ if ARGS.copy_subs => (index, None),
                     HDMV_PGS_SUBTITLE | DVD_SUBTITLE => (index, None),
                     _ => (index, Some(SSA)),
                 },
