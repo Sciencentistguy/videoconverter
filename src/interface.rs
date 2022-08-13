@@ -94,6 +94,10 @@ pub struct Args {
     /// Sets the default language to the first stream with the given language code.
     #[clap(long, value_name = "language")]
     pub default_audio_language: Option<String>,
+
+    /// Weights file for nnedi3 deinterlace filter
+    #[clap(long, default_value = "~/.ffmpeg/nnedi3_weights")]
+    pub nnedi_weights: String,
 }
 
 #[derive(Debug)]
@@ -207,7 +211,7 @@ pub fn get_tv_options() -> Option<TVOptions> {
 
     if season.is_none() {
         season = loop {
-            match util::prompt("Enter the season index of the tv show:").parse::<usize>() {
+            match util::prompt("Enter the season index of the TV show:").parse::<usize>() {
                 Ok(x) => break Some(x),
                 Err(_) => {
                     println!("Invalid response. Please try again.");

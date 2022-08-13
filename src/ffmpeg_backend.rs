@@ -178,11 +178,10 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         let crop_filter = ARGS.crop.as_ref().map(|x| x.to_string());
 
         let deinterlace_filter = if deinterlace {
-            const WEIGTHS_FILE: &str = concat!(env!("HOME"), ".ffmpeg/nnedi3_weights");
             const NNEDI_FILTER: &str = "idet,fieldmatch=mode=pc_n_ub:combmatch=full:combpel=70,nnedi=deint=interlaced:pscrn=none:threads=32:weights=";
 
             trace!("Deinterlacing video");
-            Some(format!("{}{}", NNEDI_FILTER, WEIGTHS_FILE))
+            Some(format!("{}{}", NNEDI_FILTER, ARGS.nnedi_weights))
         } else {
             None
         };

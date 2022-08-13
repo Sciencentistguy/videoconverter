@@ -40,10 +40,19 @@
             cargoLock.lockFile = ./Cargo.lock;
 
             # Point to a nixpkgs ffmpeg rather than using the one on $PATH
-            prePatch = ''
+            prePatch = let
+              nnedi_weights = builtins.fetchurl {
+                url = "https://github.com/dubhater/vapoursynth-nnedi3/raw/cc6f6065e09c9241553cb51f10002a7314d66bfa/src/nnedi3_weights.bin";
+                sha256 = "0hhx4n19qaj3g68f5kqjk23cj063g4y2zidivq9pdfrm0i1q5wr7";
+              };
+            in ''
               substituteInPlace src/ffmpeg_backend.rs \
                 --replace 'const FFMPEG_BIN_PATH: &str = "ffmpeg";'\
                           'const FFMPEG_BIN_PATH: &str = "${ffmpeg}/bin/ffmpeg";'
+
+              substituteInPlace src/interface.rs \
+                --replace '"~/.ffmpeg/nnedi3_weights"'\
+                          '"${nnedi_weights}"'
             '';
 
             nativeBuildInputs = [
