@@ -136,7 +136,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mappings = &stream_mappings;
         let codecs = &codec_mappings;
         println!(
-            "Input file '{}' --> output file '{}':",
+            "Input file '{}' -> '{}':",
             input_filepath
                 .to_str()
                 .expect("Path contained invalid unicode."),
@@ -153,13 +153,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(x) => x,
             };
 
-            println!(
+            print!(
                 "Mapping stream {}: {:?} -> {:?}{}",
                 index,
                 oldcodec,
                 newcodec,
                 if codec.is_none() { " (copy)" } else { "" }
             );
+
+            if matches!(stream, input::Stream::Video(_)) && codec.is_some() {
+                let crop = ARGS.crop.is_some();
+                // FIXME: fails to specify deinterlacing in log message if the deinterlacing is
+                // inferred from the video stream.
+                let deinterlace = ARGS.force_deinterlace;
+                if crop || deinterlace {
+                    print!(" (");
+                    if crop {
+                        print!("crop")
+                    }
+                    if crop && deinterlace {
+                        print!(", deinterlace")
+                    } else if deinterlace {
+                        print!("deinterlace")
+                    }
+                    print!(")")
+                }
+            }
+            println!();
         }
         println!();
 
