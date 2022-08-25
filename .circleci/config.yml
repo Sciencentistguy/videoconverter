@@ -8,6 +8,5 @@ jobs:
       - image: "nixos/nix"
     steps:
       - run: nix-channel --update
-      - run: nix-env -f '<nixpkgs>' -iA git
       - checkout
       - run: nix --extra-experimental-features 'flakes nix-command' build -L .#videoconverter-ci
