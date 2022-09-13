@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "3.2.21", features = ["derive"] }
-itertools = "0.10.3"
+itertools = "0.10.4"
 ffmpeg-next = "4.4.0"
 ffmpeg-sys-next = "4.4.0"
 once_cell = "1.14.0"
