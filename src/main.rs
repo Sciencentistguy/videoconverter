@@ -9,10 +9,13 @@ mod state;
 mod util;
 
 use clap::Parser;
+use ffmpeg::ChannelLayout;
 use once_cell::sync::Lazy;
 use question::Answer;
 use tracing::*;
 use tracing_subscriber::EnvFilter;
+
+use crate::input::Stream;
 
 static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);
 
@@ -153,13 +156,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some(x) => x,
             };
 
-            print!(
-                "Mapping stream {}: {:?} -> {:?}{}",
-                index,
-                oldcodec,
-                newcodec,
-                if codec.is_none() { " (copy)" } else { "" }
-            );
+            print!("Mapping stream {index}: {oldcodec:?} ");
+
+            if let Stream::Audio(audio) = stream {
+                if audio.channel_layout == ChannelLayout::STEREO {
+                    print!("(2.0) ");
+                } else if audio.channel_layout == ChannelLayout::_5POINT1 {
+                    print!("(5.1) ");
+                } else if audio.channel_layout == ChannelLayout::_7POINT1 {
+                    print!("(7.1) ");
+                }
+            }
+
+            print!("-> {newcodec:?} ");
+
+            if codec.is_none() {
+                print!("(copy) ")
+            }
 
             if matches!(stream, input::Stream::Video(_)) && codec.is_some() {
                 let crop = ARGS.crop.is_some();
@@ -167,7 +180,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // inferred from the video stream.
                 let deinterlace = ARGS.force_deinterlace;
                 if crop || deinterlace {
-                    print!(" (");
+                    print!("(");
                     if crop {
                         print!("crop")
                     }

@@ -9,38 +9,41 @@ pub use ffmpeg::codec::Context;
 pub use ffmpeg::codec::Parameters;
 pub use ffmpeg::format::context::Input;
 pub use ffmpeg::media::Type;
+use ffmpeg::ChannelLayout;
 use tracing::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum FieldOrder {
     Progressive,
     Unknown,
     Interlaced,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Video {
     pub index: usize,
     pub codec: codec::Id,
     pub field_order: FieldOrder,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Audio {
     pub index: usize,
     pub codec: codec::Id,
     pub lang: Option<String>,
+    pub channels: u16,
+    pub channel_layout: ChannelLayout,
     pub profile: Option<ffmpeg::codec::Profile>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Subtitle {
     pub index: usize,
     pub codec: codec::Id,
     pub lang: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stream {
     Video(Video),
     Audio(Audio),
@@ -133,32 +136,37 @@ impl Audio {
     ) -> Audio {
         let codec = codec_par.id();
         let lang = metadata.get("language").map(|f| f.to_string());
-        let decoder = codec_context.decoder().audio();
-        let profile = match decoder.map(|x| x.profile()) {
-            Ok(codec::Profile::Unknown) => None,
-            Ok(x) => Some(x),
-            Err(_) => None,
+        let decoder = codec_context.decoder().audio().unwrap();
+        let channels = decoder.channels();
+        let channel_layout = decoder.channel_layout();
+        let profile = match decoder.profile() {
+            codec::Profile::Unknown => None,
+            x => Some(x),
         };
 
         Audio {
             index,
             codec,
             lang,
+            channels,
+            channel_layout,
             profile,
         }
     }
 }
 
-impl Default for Audio {
-    fn default() -> Self {
-        Audio {
-            index: 0,
-            codec: codec::Id::None,
-            lang: None,
-            profile: None,
-        }
-    }
-}
+/*
+ * impl Default for Audio {
+ *     fn default() -> Self {
+ *         Audio {
+ *             index: 0,
+ *             codec: codec::Id::None,
+ *             lang: None,
+ *             profile: None,
+ *         }
+ *     }
+ * }
+ */
 
 impl Subtitle {
     pub fn new(
@@ -223,17 +231,17 @@ pub fn get_stream_mappings(mut parsed: Vec<Stream>) -> StreamMappings {
 
     for stream in parsed.iter_mut() {
         match stream {
-            Stream::Video(ref mut x) => {
+            Stream::Video( x) => {
                 if x.codec != codec::Id::MJPEG {
                     videos.push(Stream::Video(mem::take(x)));
                 }
             }
-            Stream::Audio(ref mut x) => {
+            Stream::Audio( x) => {
                 if x.lang == Some("eng".to_string()) || ARGS.all_streams {
-                    audios.push(Stream::Audio(mem::take(x)));
+                    audios.push(Stream::Audio(x.clone()));
                 }
             }
-            Stream::Subtitle(ref mut x) => {
+            Stream::Subtitle( x) => {
                 if x.lang == Some("eng".to_string()) || ARGS.all_streams {
                     subtitles.push(Stream::Subtitle(mem::take(x)));
                 }
@@ -250,8 +258,8 @@ pub fn get_stream_mappings(mut parsed: Vec<Stream>) -> StreamMappings {
     if audios.is_empty() {
         // if no english streams are detected, just use all streams
         for stream in parsed.iter_mut() {
-            if let Stream::Audio(ref mut x) = stream {
-                audios.push(Stream::Audio(mem::take(x)));
+            if let Stream::Audio(x) = stream {
+                audios.push(Stream::Audio(x.clone()));
             }
         }
     }
@@ -259,7 +267,7 @@ pub fn get_stream_mappings(mut parsed: Vec<Stream>) -> StreamMappings {
     if subtitles.is_empty() {
         // if no english streams are detected, just use all streams
         for stream in parsed.iter_mut() {
-            if let Stream::Subtitle(ref mut x) = stream {
+            if let Stream::Subtitle(x) = stream {
                 subtitles.push(Stream::Subtitle(mem::take(x)));
             }
         }
