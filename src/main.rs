@@ -217,12 +217,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    for mut command in commands {
-        if !ARGS.simulate {
-            if ARGS.parallel {
-                command.spawn()?;
-            } else {
-                command.status()?;
+    match ARGS.parallel {
+        Some(jobs) => {
+            let jobs = jobs.unwrap_or(usize::MAX);
+            let mut running = Vec::new();
+            loop {
+                while running.len() < jobs && !commands.is_empty() {
+                    let mut command = commands.pop().unwrap();
+                    let child = command.spawn()?;
+                    running.push(child);
+                }
+
+                if running.is_empty() {
+                    break;
+                }
+
+                for i in 0..running.len() {
+                    let child = &mut running[i];
+                    match child.try_wait()? {
+                        Some(status) => {
+                            if !status.success() {
+                                for proc in &mut running {
+                                    proc.kill()?;
+                                }
+                                eprintln!("Command failed");
+                                return Ok(());
+                            }
+                            running.remove(i);
+                        }
+                        None => {}
+                    }
+                }
+            }
+        }
+        None => {
+            for mut command in commands {
+                command.spawn()?.wait()?;
             }
         }
     }

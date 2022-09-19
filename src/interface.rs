@@ -82,10 +82,9 @@ pub struct Args {
     #[clap(long, default_value = "/tmp/videoconverter.state")]
     pub statefile: PathBuf,
 
-    /// Spawn each ffmpeg command concurrently. WARNING: Doesn't kill child processes properly,
-    /// and so cannot be safely interrupted with, e.g. Ctrl-C.
-    #[clap(short, long)]
-    pub parallel: bool,
+    /// Spawn each ffmpeg command concurrently.
+    #[clap(short, long, value_name="MAX_JOBS")]
+    pub parallel: Option<Option<usize>>,
 
     /// Sets the default language to the first stream with the given language code.
     #[clap(long, value_name = "language")]
