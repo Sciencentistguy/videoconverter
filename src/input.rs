@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::mem;
 
 use crate::interface::VideoEncoder;
 use crate::ARGS;
@@ -80,20 +79,10 @@ impl Stream {
             None
         }
     }
-}
 
-impl StreamMappings {
-    pub fn iter(&self) -> impl Iterator<Item = &Stream> {
-        self.video
-            .iter()
-            .chain(self.audio.iter())
-            .chain(self.subtitle.iter())
-    }
-}
-
-impl Video {
-    pub fn new(index: usize, codec_context: Context, codec_par: Parameters) -> Video {
-        let codec = codec_par.id();
+    fn video(index: usize, codec_context: Context, codec_parameters: Parameters) -> Stream {
+        let index = index;
+        let codec = codec_parameters.id();
 
         let decoder = codec_context.decoder().video();
         let field_order = match unsafe { decoder.map(|x| (*x.as_ptr()).field_order) } {
@@ -109,33 +98,21 @@ impl Video {
             }
         };
 
-        Video {
+        Self::Video(Video {
             index,
             codec,
             field_order,
-        }
+        })
     }
-}
 
-impl Default for Video {
-    fn default() -> Self {
-        Video {
-            index: 0,
-            codec: codec::Id::None,
-            field_order: FieldOrder::Unknown,
-        }
-    }
-}
-
-impl Audio {
-    pub fn new(
+    fn audio(
         index: usize,
         codec_context: Context,
-        codec_par: Parameters,
-        metadata: ffmpeg::util::dictionary::Ref<'_>,
-    ) -> Audio {
-        let codec = codec_par.id();
-        let lang = metadata.get("language").map(|f| f.to_string());
+        codec_parameters: Parameters,
+        tags: ffmpeg::DictionaryRef,
+    ) -> Stream {
+        let codec = codec_parameters.id();
+        let lang = tags.get("language").map(|f| f.to_string());
         let decoder = codec_context.decoder().audio().unwrap();
         let channels = decoder.channels();
         let channel_layout = decoder.channel_layout();
@@ -144,120 +121,93 @@ impl Audio {
             x => Some(x),
         };
 
-        Audio {
+        Self::Audio(Audio {
             index,
             codec,
             lang,
             channels,
             channel_layout,
             profile,
-        }
+        })
+    }
+
+    fn subtitle(index: usize, codec_parameters: Parameters, tags: ffmpeg::DictionaryRef) -> Stream {
+        let codec = codec_parameters.id();
+        let lang = tags.get("language").map(|f| f.to_string());
+
+        Self::Subtitle(Subtitle { index, codec, lang })
     }
 }
 
-/*
- * impl Default for Audio {
- *     fn default() -> Self {
- *         Audio {
- *             index: 0,
- *             codec: codec::Id::None,
- *             lang: None,
- *             profile: None,
- *         }
- *     }
- * }
- */
-
-impl Subtitle {
-    pub fn new(
-        index: usize,
-        codec_par: Parameters,
-        metadata: ffmpeg::util::dictionary::Ref<'_>,
-    ) -> Subtitle {
-        let codec = codec_par.id();
-        let lang = metadata.get("language").map(|f| f.to_string());
-
-        Subtitle { index, codec, lang }
-    }
-}
-
-impl Default for Subtitle {
-    fn default() -> Self {
-        Subtitle {
-            index: 0,
-            codec: codec::Id::None,
-            lang: None,
-        }
+impl StreamMappings {
+    pub fn iter(&self) -> impl Iterator<Item = &Stream> {
+        self.video
+            .iter()
+            .chain(self.audio.iter())
+            .chain(self.subtitle.iter())
     }
 }
 
 pub fn parse_stream_metadata(file: Input) -> Vec<Stream> {
-    let mut out: Vec<Stream> = Vec::new();
-    for stream in file.streams() {
-        let index = stream.index();
-        let codec_context = stream.codec();
-        let codec_parameters = stream.parameters();
-        let tags = stream.metadata();
-        //let explode = codec.codec().unwrap();
-        match codec_context.medium() {
-            Type::Video => out.push(Stream::Video(Video::new(
-                index,
-                codec_context,
-                codec_parameters,
-            ))),
+    file.streams()
+        .filter_map(|stream| {
+            let index = stream.index();
+            let codec_context = stream.codec();
+            let codec_parameters = stream.parameters();
+            let tags = stream.metadata();
 
-            Type::Audio => out.push(Stream::Audio(Audio::new(
-                index,
-                codec_context,
-                codec_parameters,
-                tags,
-            ))),
-
-            Type::Subtitle => out.push(Stream::Subtitle(Subtitle::new(
-                index,
-                codec_parameters,
-                tags,
-            ))),
-            _ => {}
-        };
-    }
-    out
+            match codec_context.medium() {
+                Type::Video => Some(Stream::video(index, codec_context, codec_parameters)),
+                Type::Audio => Some(Stream::audio(index, codec_context, codec_parameters, tags)),
+                Type::Subtitle => Some(Stream::subtitle(index, codec_parameters, tags)),
+                _ => None,
+            }
+        })
+        .collect()
 }
 
-pub fn get_stream_mappings(mut parsed: Vec<Stream>) -> StreamMappings {
-    let mut videos: Vec<Stream> = Vec::new();
-    let mut audios: Vec<Stream> = Vec::new();
-    let mut subtitles: Vec<Stream> = Vec::new();
+pub fn get_stream_mappings(parsed: &[Stream]) -> StreamMappings {
+    let mut videos = Vec::new();
+    let mut audios = Vec::new();
+    let mut subtitles = Vec::new();
 
-    for stream in parsed.iter_mut() {
+    for stream in parsed {
         match stream {
-            Stream::Video( x) => {
+            Stream::Video(x) => {
                 if x.codec != codec::Id::MJPEG {
-                    videos.push(Stream::Video(mem::take(x)));
+                    videos.push(Stream::Video(x.clone()));
                 }
             }
-            Stream::Audio( x) => {
-                if x.lang == Some("eng".to_string()) || ARGS.all_streams {
+
+            Stream::Audio(x) => {
+                if x.lang.as_deref() == Some("eng") || ARGS.all_streams {
                     audios.push(Stream::Audio(x.clone()));
                 }
             }
-            Stream::Subtitle( x) => {
-                if x.lang == Some("eng".to_string()) || ARGS.all_streams {
-                    subtitles.push(Stream::Subtitle(mem::take(x)));
+
+            Stream::Subtitle(x) => {
+                if x.lang.as_deref() == Some("eng") || ARGS.all_streams {
+                    subtitles.push(Stream::Subtitle(x.clone()));
                 }
             }
         }
     }
 
-    if videos.len() != 1 {
-        let num_vids = videos.len();
-        warn!(n = ?num_vids, "File has multiple video streams. Only the first stream will be kept");
-        videos.truncate(1);
+    match videos.len() {
+        0 => {
+            error!("No video streams found");
+            std::process::exit(1);
+        }
+        1 => {}
+        n => {
+            warn!(%n, "File has multiple video streams. Only the first stream will be kept");
+            videos.truncate(1);
+        }
     }
 
     if audios.is_empty() {
-        // if no english streams are detected, just use all streams
-        for stream in parsed.iter_mut() {
+        warn!("No english audio streams found. Retaining all audio streams");
+        for stream in parsed {
             if let Stream::Audio(x) = stream {
                 audios.push(Stream::Audio(x.clone()));
             }
@@ -265,10 +215,10 @@ pub fn get_stream_mappings(mut parsed: Vec<Stream>) -> StreamMappings {
     }
 
     if subtitles.is_empty() {
-        // if no english streams are detected, just use all streams
-        for stream in parsed.iter_mut() {
+        warn!("No english subtitle streams found. Retaining all subtitle streams");
+        for stream in parsed {
             if let Stream::Subtitle(x) = stream {
-                subtitles.push(Stream::Subtitle(mem::take(x)));
+                subtitles.push(Stream::Subtitle(x.clone()));
             }
         }
     }
@@ -281,23 +231,14 @@ pub fn get_stream_mappings(mut parsed: Vec<Stream>) -> StreamMappings {
 }
 
 pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Option<codec::Id>> {
-    use codec::Id::AAC;
-    use codec::Id::DTS;
-    use codec::Id::DVD_SUBTITLE;
-    use codec::Id::FLAC;
-    use codec::Id::H264;
-    use codec::Id::HDMV_PGS_SUBTITLE;
-    use codec::Id::HEVC;
-    use codec::Id::SSA;
-    use codec::Id::TRUEHD;
+    use codec::Id::{AAC, DTS, DVD_SUBTITLE, FLAC, H264, HDMV_PGS_SUBTITLE, HEVC, SSA, TRUEHD};
 
     stream_mappings
         .iter()
         .map(|stream| {
             let index = stream.index();
             match stream {
-                Stream::Video(video) => match video.codec {
-                    _ if ARGS.copy_video => (index, None),
+                Stream::Video(video) if !ARGS.copy_video => match video.codec {
                     HEVC | H264 if !ARGS.force_reencode_video => (index, None),
                     _ => (
                         index,
@@ -308,34 +249,23 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
                         }),
                     ),
                 },
-                Stream::Audio(audio) => {
-                    if !ARGS.reencode_audio {
-                        (index, None)
-                    } else {
-                        match audio.codec {
-                            FLAC | AAC => (index, None),
-                            TRUEHD => (index, Some(FLAC)),
-                            DTS if matches!(
-                                audio.profile,
-                                Some(codec::Profile::DTS(codec::profile::DTS::HD_MA))
-                            ) =>
-                            {
-                                (index, Some(FLAC))
-                            }
-                            _ => (index, Some(AAC)),
-                        }
+                Stream::Audio(audio) if ARGS.reencode_audio => match audio.codec {
+                    FLAC | AAC => (index, None),
+                    TRUEHD => (index, Some(FLAC)),
+                    DTS if matches!(
+                        audio.profile,
+                        Some(codec::Profile::DTS(codec::profile::DTS::HD_MA))
+                    ) =>
+                    {
+                        (index, Some(FLAC))
                     }
-                }
-                Stream::Subtitle(subtitle) => {
-                    if !ARGS.reencode_subs {
-                        (index, None)
-                    } else {
-                        match subtitle.codec {
-                            HDMV_PGS_SUBTITLE | DVD_SUBTITLE => (index, None),
-                            _ => (index, Some(SSA)),
-                        }
-                    }
-                }
+                    _ => (index, Some(AAC)),
+                },
+                Stream::Subtitle(subtitle) if ARGS.reencode_subs => match subtitle.codec {
+                    HDMV_PGS_SUBTITLE | DVD_SUBTITLE => (index, None),
+                    _ => (index, Some(SSA)),
+                },
+                _ => (index, None),
             }
         })
         .collect()

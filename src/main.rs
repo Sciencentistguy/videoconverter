@@ -133,7 +133,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let file = ffmpeg::format::input(&input_filepath)?;
 
         let parsed = input::parse_stream_metadata(file);
-        let stream_mappings = input::get_stream_mappings(parsed);
+        let stream_mappings = input::get_stream_mappings(&parsed);
         let codec_mappings = input::get_codec_mapping(&stream_mappings);
 
         let mappings = &stream_mappings;
