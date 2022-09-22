@@ -1,6 +1,6 @@
 extern crate ffmpeg_next as ffmpeg;
 
-use std::os::unix::prelude::OsStrExt;
+use std::{os::unix::prelude::OsStrExt, time::Duration};
 
 mod ffmpeg_backend;
 mod input;
@@ -251,6 +251,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         None => {}
                     }
                 }
+                std::thread::sleep(Duration::from_secs(10));
             }
         }
         None => {
