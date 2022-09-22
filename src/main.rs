@@ -59,10 +59,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     debug!(?tv_options);
 
-    let entries = if ARGS.path.is_file() {
-        vec![ARGS.path.clone()]
-    } else if ARGS.path.is_dir() {
-        let mut v: Vec<_> = std::fs::read_dir(&ARGS.path)?
+    let path = ARGS.path.canonicalize()?;
+
+    let entries = if path.is_file() {
+        vec![ path.clone()]
+    } else if  path.is_dir() {
+        let mut v: Vec<_> = std::fs::read_dir(&path)?
             .map(|entry| entry.unwrap().path())
             .filter(|path| !path.is_dir()) // Remove directories
             .filter(|path| {
@@ -88,16 +90,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         v.sort_unstable();
         v
     } else {
-        unreachable!("`path` must be a file or directory");
+        error!("Provided path must be either a file or a directory");
+        std::process::exit(1);
     };
 
     debug!(?entries);
 
     // prepare directory
     let output_dir = if let Some(ref tv_options) = tv_options {
-        ARGS.path.join(format!("Season {:02}", tv_options.season))
+        path.join(format!("Season {:02}", tv_options.season))
     } else {
-        ARGS.path.join("newfiles")
+        path.join("newfiles")
     };
     if output_dir.is_dir() {
         info!(dir = ?output_dir, "Directory already exists");

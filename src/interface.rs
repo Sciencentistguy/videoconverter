@@ -83,7 +83,7 @@ pub struct Args {
     pub statefile: PathBuf,
 
     /// Spawn each ffmpeg command concurrently.
-    #[clap(short, long, value_name="MAX_JOBS")]
+    #[clap(short, long, value_name = "MAX_JOBS")]
     pub parallel: Option<Option<usize>>,
 
     /// Sets the default language to the first stream with the given language code.
@@ -93,6 +93,10 @@ pub struct Args {
     /// Weights file for nnedi3 deinterlace filter
     #[clap(long, default_value = "~/.ffmpeg/nnedi3_weights")]
     pub nnedi_weights: String,
+
+    /// Overwrite output file, instead of erroring out.
+    #[clap(long)]
+    pub overwrite: bool,
 }
 
 #[derive(Debug)]
@@ -114,7 +118,7 @@ impl FromStr for CropFilter {
         if !r.is_match(input) {
             return Err("Crop filter must be of the form `crop=height:width:x:y`");
         }
-        // TODO check that its a proper crop string
+        // TODO check that its a sane crop string
         Ok(Self(input.to_owned()))
     }
 }

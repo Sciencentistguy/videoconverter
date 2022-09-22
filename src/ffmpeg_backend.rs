@@ -38,22 +38,34 @@ pub fn generate_output_filename<P: AsRef<Path>>(path: P, tv_options: &Option<TVO
     }
 }
 
-fn encoder_for(codec: codec::Id) -> &'static str {
-    use codec::Id;
-    match codec {
-        Id::AAC => "libfdk_aac",
-        Id::FLAC => "flac",
-        Id::H264 => "libx264",
-        Id::HEVC => match ARGS.encoder {
-            VideoEncoder::Libx264 => unreachable!(),
-            VideoEncoder::Libx265 => "libx265",
-            VideoEncoder::Nvenc => "hevc_nvenc",
-        },
-        Id::SSA => "ass",
-        _ => unreachable!(
-            "Unexpected output codec '{:?}' passed to get_encoder.",
-            codec
-        ),
+trait GetEncoderExt {
+    fn get_encoder(&self) -> &'static str;
+}
+
+impl GetEncoderExt for codec::Id {
+    fn get_encoder(&self) -> &'static str {
+        use codec::Id;
+        match self {
+            Id::AAC => "libfdk_aac",
+            Id::FLAC => "flac",
+            Id::H264 => "libx264",
+            Id::HEVC => match ARGS.encoder {
+                VideoEncoder::Libx264 => {
+                    error!("Internal error: HEVC is not supported with libx264");
+                    unreachable!();
+                }
+                VideoEncoder::Libx265 => "libx265",
+                VideoEncoder::Nvenc => "hevc_nvenc",
+            },
+            Id::SSA => "ass",
+            _ => {
+                error!(
+                    codec=?self,
+                    "Internal error: Unexpected output codec passed to get_encoder."
+                );
+                unreachable!();
+            }
+        }
     }
 }
 
@@ -67,15 +79,24 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     command.arg("-hide_banner"); // Remove gpl banner
 
     if !ARGS.simulate && output_path.as_ref().exists() {
-        error!(file = ?output_path.as_ref().to_string_lossy(),
-            "Output file already exists. Exiting"
-        );
-        std::process::exit(1);
+        if ARGS.overwrite {
+            warn!(file = ?output_path.as_ref().to_string_lossy(),
+                "Output file already exists. Overwriting"
+            );
+        } else {
+            error!(file = ?output_path.as_ref().to_string_lossy(),
+                "Output file already exists. Exiting"
+            );
+            std::process::exit(1);
+        }
     }
 
     let video_stream = match mappings.video.get(0) {
         Some(Stream::Video(x)) => x,
-        _ => panic!("File does not have a video stream."),
+        _ => {
+            error!("Input file does not contain a video stream.");
+            std::process::exit(1);
+        }
     };
 
     let reencoding_video =
@@ -145,7 +166,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             let codec = target_codecs[&index_in];
             command.arg(format!("-c:{}:{}", stream_type, index_out));
             if let Some(&codec) = codec.as_ref() {
-                command.arg(encoder_for(codec));
+                command.arg(codec.get_encoder());
             } else if mappings.video.iter().map(|x| x.index()).contains(&index_in)
                 && ARGS.force_reencode_video
             {
