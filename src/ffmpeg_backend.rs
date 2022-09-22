@@ -86,9 +86,52 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         .map(|x| x.index())
         .any(|x| target_codecs[&x].is_some());
 
-    if !ARGS.no_hwaccel {
-        command.arg("-hwaccel");
-        command.arg("auto");
+    if reencoding_video && !ARGS.no_hwaccel {
+        use codec::Id;
+        match video_stream.codec {
+            Id::H264 => {
+                command.arg("-c:v");
+                command.arg("h264_cuvid");
+            }
+            Id::HEVC => {
+                command.arg("-c:v");
+                command.arg("hevc_cuvid");
+            }
+            Id::MJPEG => {
+                command.arg("-c:v");
+                command.arg("mjpeg_cuvid");
+            }
+            Id::MPEG1VIDEO => {
+                command.arg("-c:v");
+                command.arg("mpeg1_cuvid");
+            }
+            Id::MPEG2VIDEO => {
+                command.arg("-c:v");
+                command.arg("mpeg2_cuvid");
+            }
+            Id::MPEG4 => {
+                command.arg("-c:v");
+                command.arg("mpeg4_cuvid");
+            }
+            Id::VC1 => {
+                command.arg("-c:v");
+                command.arg("vc1_cuvid");
+            }
+            Id::VP8 => {
+                command.arg("-c:v");
+                command.arg("vp8_cuvid");
+            }
+            Id::VP9 => {
+                command.arg("-c:v");
+                command.arg("vp9_cuvid");
+            }
+
+            _ => {
+                warn!("No hardware acceleration available for video stream. Using generic mode.");
+                command.arg("-hwaccel");
+                command.arg("auto");
+            }
+        }
     }
 
     command.arg("-i");
@@ -136,9 +179,6 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
                 command.arg("-crf");
                 command.arg(ARGS.crf.to_string());
                 command.args(LIBX264_FLAGS);
-                if !ARGS.no_hwaccel {
-                    command.args(&["-x264opts", "opencl"]);
-                }
 
                 if let Some(ref x) = ARGS.tune {
                     let s = x.to_string().to_lowercase();
