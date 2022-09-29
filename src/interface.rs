@@ -6,7 +6,7 @@ use crate::state;
 use crate::util;
 use crate::ARGS;
 
-use clap::ArgEnum;
+use clap::ValueEnum;
 use clap::Parser;
 use question::Answer;
 use regex::Regex;
@@ -51,11 +51,11 @@ pub struct Args {
     pub reencode_subs: bool,
 
     /// Specify encoder to use.
-    #[clap(short, long, default_value = "libx264", ignore_case = true, arg_enum)]
+    #[clap(short, long, default_value = "libx264", ignore_case = true, value_enum)]
     pub encoder: VideoEncoder,
 
     /// Specify encoder preset
-    #[clap(long, default_value = "slow", ignore_case = true, arg_enum)]
+    #[clap(long, default_value = "slow", ignore_case = true, value_enum)]
     pub preset: VideoEncoderPreset,
 
     /// Disable hardware-accelerated decoding
@@ -67,7 +67,7 @@ pub struct Args {
     pub simulate: bool,
 
     /// Specify libx264 tune. Has no effect with Nvenc.
-    #[clap(short, long, ignore_case = true, arg_enum)]
+    #[clap(short, long, ignore_case = true, value_enum)]
     pub tune: Option<Libx264Tune>,
 
     /// The path to operate on
@@ -99,7 +99,7 @@ pub struct Args {
     pub overwrite: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CropFilter(pub String);
 
 impl Deref for CropFilter {
@@ -123,7 +123,7 @@ impl FromStr for CropFilter {
     }
 }
 
-#[derive(Debug, ArgEnum, Clone, strum::Display)]
+#[derive(Debug, ValueEnum, Clone, strum::Display)]
 #[strum(serialize_all = "lowercase")]
 pub enum VideoEncoder {
     Libx264,
@@ -131,7 +131,7 @@ pub enum VideoEncoder {
     Nvenc,
 }
 
-#[derive(Debug, ArgEnum, Clone, strum::Display)]
+#[derive(Debug, ValueEnum, Clone, strum::Display)]
 #[strum(serialize_all = "lowercase")]
 pub enum VideoEncoderPreset {
     Ultrafast,
@@ -146,7 +146,7 @@ pub enum VideoEncoderPreset {
     Placebo,
 }
 
-#[derive(Debug, ArgEnum, Clone, strum::Display)]
+#[derive(Debug, ValueEnum, Clone, strum::Display)]
 #[strum(serialize_all = "lowercase")]
 pub enum Libx264Tune {
     Film,
