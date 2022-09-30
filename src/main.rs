@@ -62,8 +62,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = ARGS.path.canonicalize()?;
 
     let entries = if path.is_file() {
-        vec![ path.clone()]
-    } else if  path.is_dir() {
+        vec![path.clone()]
+    } else if path.is_dir() {
         let mut v: Vec<_> = std::fs::read_dir(&path)?
             .map(|entry| entry.unwrap().path())
             .filter(|path| !path.is_dir()) // Remove directories
@@ -224,7 +224,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(jobs) => {
             let jobs = jobs.unwrap_or(usize::MAX);
             let mut running = Vec::new();
-            loop {
+            'outer: loop {
                 while running.len() < jobs && !commands.is_empty() {
                     let mut command = commands.pop().unwrap();
                     let child = command.spawn()?;
@@ -236,7 +236,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 for i in 0..running.len() {
-                    let child = &mut running[i];
+                    let child = match running.get_mut(i) {
+                        Some(x) => x,
+                        None => continue 'outer,
+                    };
                     match child.try_wait()? {
                         Some(status) => {
                             if !status.success() {
