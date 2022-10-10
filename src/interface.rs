@@ -6,8 +6,8 @@ use crate::state;
 use crate::util;
 use crate::ARGS;
 
-use clap::ValueEnum;
 use clap::Parser;
+use clap::ValueEnum;
 use question::Answer;
 use regex::Regex;
 

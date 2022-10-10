@@ -1,6 +1,6 @@
 extern crate ffmpeg_next as ffmpeg;
 
-use std::{os::unix::prelude::OsStrExt, time::Duration};
+use std::{io, os::unix::prelude::OsStrExt, path::Path, time::Duration};
 
 mod ffmpeg_backend;
 mod input;
@@ -10,6 +10,7 @@ mod util;
 
 use clap::Parser;
 use ffmpeg::ChannelLayout;
+use interface::TVOptions;
 use once_cell::sync::Lazy;
 use question::Answer;
 use tracing::*;
@@ -31,6 +32,23 @@ static INPUT_FILE_EXTENSIONS: Lazy<Vec<String>> = Lazy::new(|| {
         })
         .collect::<Vec<_>>()
 });
+
+fn create_output_dir(path: &Path, tv_options: &Option<TVOptions>) -> io::Result<()> {
+    let output_dir = if let Some(ref tv_options) = tv_options {
+        path.join(format!("Season {:02}", tv_options.season))
+    } else {
+        path.join("newfiles")
+    };
+
+    if output_dir.is_dir() {
+        info!(dir = ?output_dir, "Directory already exists");
+    } else {
+        std::fs::create_dir(&output_dir)?;
+        info!(dir = ?output_dir, "Created directory");
+    }
+
+    Ok(())
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     ffmpeg::init()?;
@@ -95,21 +113,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     debug!(?entries);
-
-    // prepare directory
-    let output_dir = if let Some(ref tv_options) = tv_options {
-        path.join(format!("Season {:02}", tv_options.season))
-    } else {
-        path.join("newfiles")
-    };
-    if output_dir.is_dir() {
-        info!(dir = ?output_dir, "Directory already exists");
-    } else if ARGS.simulate {
-        info!(dir = ?output_dir, "Simulate mode: not creating directory");
-    } else {
-        std::fs::create_dir(&output_dir)?;
-        info!(dir = ?output_dir, "Created directory");
-    }
 
     let mut commands = Vec::with_capacity(entries.len());
 
@@ -219,6 +222,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Aborting");
         return Ok(());
     }
+
+    create_output_dir(&path, &tv_options)?;
 
     match ARGS.parallel {
         Some(jobs) => {
