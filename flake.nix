@@ -72,13 +72,15 @@
           };
       in {
         packages.videoconverter = pkgs.callPackage videoconverter {
-          ffmpeg = pkgs.ffmpeg-full.override {
+          ffmpeg = pkgs.ffmpeg_5-full.override {
             nonfreeLicensing = true;
             fdkaacExtlib = true;
           };
         };
         # Assume that ffmpeg-full works and I don't need to build it in CI
-        packages.videoconverter-ci = pkgs.callPackage videoconverter {};
+        packages.videoconverter-ci = pkgs.callPackage videoconverter {
+          ffmpeg = pkgs.ffmpeg_5;
+        };
 
         packages.default = self.packages.${system}.videoconverter;
 

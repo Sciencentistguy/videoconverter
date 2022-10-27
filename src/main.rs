@@ -20,18 +20,9 @@ use crate::input::Stream;
 
 static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);
 
-static INPUT_FILE_EXTENSIONS: Lazy<Vec<String>> = Lazy::new(|| {
-    use ffmpeg::format::format::Format;
-    ffmpeg_next::format::format::list()
-        .filter(|x| matches!(x, Format::Input(_)))
-        .flat_map(|x| {
-            x.extensions()
-                .into_iter()
-                .map(|y| y.to_owned())
-                .collect::<Vec<_>>()
-        })
-        .collect::<Vec<_>>()
-});
+const EXEMPT_FILE_EXTENSIONS: [&str; 11] = [
+    "clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt",
+];
 
 fn create_output_dir(path: &Path, tv_options: &Option<TVOptions>) -> io::Result<()> {
     let output_dir = if let Some(ref tv_options) = tv_options {
@@ -62,7 +53,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!(?ARGS);
 
     // Shut libav* up
-    unsafe { ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL) };
+    // Safety: Calling c function, modifying global state
+    unsafe {
+        ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL);
+    }
 
     let mut tv_options = interface::get_tv_options();
 
@@ -87,22 +81,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .filter(|path| !path.is_dir()) // Remove directories
             .filter(|path| {
                 // Remove files that start with '.'
-                path.file_name()
-                    .map(|filename| !filename.as_bytes().starts_with(b"."))
-                    .unwrap_or(false) // Remove files that have no filename (?)
+                !path
+                    .file_name()
+                    .map(|filename| filename.as_bytes().starts_with(b"."))
+                    .unwrap_or(true) // Remove files that have no filename (?)
             })
             .filter(|path| {
-                // Only consider files that ffmpeg can actually take as input
-                match path.extension().and_then(|x| x.to_str()) {
-                    // Special case for `.nfo` and `.txt`: these are never video files.
-                    Some("nfo" | "txt") => false,
-                    // If there is no extension; assume it is not a video file - ffmpeg would get
-                    // confused anyway.
-                    None => false,
-                    Some(file_extension) => INPUT_FILE_EXTENSIONS
-                        .iter()
-                        .any(|ext| ext.as_str() == file_extension),
-                }
+                // Remove files with extensions that are exempt
+                let file_extension = match path.extension().and_then(|x| x.to_str()) {
+                    Some(x) => x,
+                    None => {
+                        // Remove filles with no extension
+                        return false;
+                    }
+                };
+                // Remove files of the form `*.r00`, `*.r01`, etc
+                let is_rar_segment = file_extension.starts_with('r')
+                    && file_extension[1..].chars().all(|c| c.is_digit(10));
+
+                !(EXEMPT_FILE_EXTENSIONS.contains(&file_extension) || is_rar_segment)
             })
             .collect();
         v.sort_unstable();

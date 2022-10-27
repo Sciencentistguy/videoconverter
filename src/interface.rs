@@ -26,20 +26,20 @@ pub struct Args {
     #[clap(long)]
     pub crop: Option<CropFilter>,
 
-    /// Force deinterlacing of video
-    #[clap(short = 'd', long, conflicts_with = "no-deinterlace")]
-    pub force_deinterlace: bool,
-
     /// Disable automatic deinterlacing of video
     #[clap(short = 'D', long)]
     pub no_deinterlace: bool,
+
+    /// Force deinterlacing of video
+    #[clap(short = 'd', long, conflicts_with = "no_deinterlace")]
+    pub force_deinterlace: bool,
 
     /// Force reencoding of video
     #[clap(long = "force-reencode")]
     pub force_reencode_video: bool,
 
     /// Disable reencoding of video
-    #[clap(long, conflicts_with_all = &["force-reencode-video", "force-deinterlace"])]
+    #[clap(long, conflicts_with_all = &["force_reencode_video", "force_deinterlace"])]
     pub copy_video: bool,
 
     /// Enable reencoding of audio

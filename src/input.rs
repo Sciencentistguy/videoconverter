@@ -152,8 +152,9 @@ pub fn parse_stream_metadata(file: Input) -> Vec<Stream> {
     file.streams()
         .filter_map(|stream| {
             let index = stream.index();
-            let codec_context = stream.codec();
             let codec_parameters = stream.parameters();
+            let codec_context = ffmpeg::codec::context::Context::from_parameters(codec_parameters.clone()).unwrap();
+            // let codec_context = stream.codec();
             let tags = stream.metadata();
 
             match codec_context.medium() {
