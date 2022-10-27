@@ -64,6 +64,8 @@
               ffmpeg
             ];
 
+            inherit ffmpeg;
+
             meta = with lib; {
               license = licenses.mpl20;
               homepage = "https://github.com/Sciencentistguy/videoconverter";
