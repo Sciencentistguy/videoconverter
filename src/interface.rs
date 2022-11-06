@@ -74,6 +74,10 @@ pub struct Args {
     #[clap(default_value = ".")]
     pub path: std::path::PathBuf,
 
+    /// The directory to generate `newfiles` in (or Season XX in TV mode)
+    #[clap(long)]
+    pub output_path: Option<std::path::PathBuf>,
+
     /// Enables renaming of files to TV show format
     #[clap(long, short = 'T')]
     pub tv_mode: bool,

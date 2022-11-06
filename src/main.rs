@@ -1,6 +1,11 @@
 extern crate ffmpeg_next as ffmpeg;
 
-use std::{io, os::unix::prelude::OsStrExt, path::Path, time::Duration};
+use std::{
+    io,
+    os::unix::prelude::OsStrExt,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 mod ffmpeg_backend;
 mod input;
@@ -24,7 +29,7 @@ const EXEMPT_FILE_EXTENSIONS: [&str; 11] = [
     "clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt",
 ];
 
-fn create_output_dir(path: &Path, tv_options: &Option<TVOptions>) -> io::Result<()> {
+fn create_output_dir(path: &Path, tv_options: &Option<TVOptions>) -> io::Result<PathBuf> {
     let output_dir = if let Some(ref tv_options) = tv_options {
         path.join(format!("Season {:02}", tv_options.season))
     } else {
@@ -38,7 +43,7 @@ fn create_output_dir(path: &Path, tv_options: &Option<TVOptions>) -> io::Result<
         info!(dir = ?output_dir, "Created directory");
     }
 
-    Ok(())
+    Ok(output_dir)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -74,7 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = ARGS.path.canonicalize()?;
 
     let entries = if path.is_file() {
-        vec![path.clone()]
+        vec![path]
     } else if path.is_dir() {
         let mut v: Vec<_> = std::fs::read_dir(&path)?
             .map(|entry| entry.unwrap().path())
@@ -97,7 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
                 // Remove files of the form `*.r00`, `*.r01`, etc
                 let is_rar_segment = file_extension.starts_with('r')
-                    && file_extension[1..].chars().all(|c| c.is_digit(10));
+                    && file_extension[1..].chars().all(|c| c.is_ascii_digit());
 
                 !(EXEMPT_FILE_EXTENSIONS.contains(&file_extension) || is_rar_segment)
             })
@@ -113,21 +118,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut commands = Vec::with_capacity(entries.len());
 
-    for input_filepath in entries {
+    let output_dir = create_output_dir(
+        ARGS.output_path
+            .as_deref()
+            .unwrap_or_else(|| entries[0].parent().expect("entry should not be `/`")),
+        &tv_options,
+    )?;
+
+    for input_filepath in &entries {
         let output_filename =
             ffmpeg_backend::generate_output_filename(&input_filepath, &tv_options);
-        let output_path = if let Some(ref tv_options) = tv_options {
-            input_filepath
-                .parent()
-                .expect("input_filepath should have a parent")
-                .join(format!("Season {:02}", tv_options.season))
-        } else {
-            input_filepath
-                .parent()
-                .expect("input_filepath should have a parent")
-                .join("newfiles")
-        }
-        .join(output_filename);
+        let output_path = output_dir.join(output_filename);
 
         if let Some(ref mut tv_options) = tv_options {
             tv_options.episode += 1;
@@ -201,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let command = ffmpeg_backend::generate_ffmpeg_command(
             input_filepath,
-            output_path,
+            &output_path,
             stream_mappings,
             codec_mappings,
         );
@@ -211,6 +212,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if ARGS.simulate {
+        if let Err(e) = std::fs::remove_dir(output_dir) {
+            warn!(error=%e, "Failed to remove output directory. It may not be empty");
+        }
         eprintln!("Simulate mode; not executing commands");
         return Ok(());
     }
@@ -219,8 +223,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Aborting");
         return Ok(());
     }
-
-    create_output_dir(&path, &tv_options)?;
 
     match ARGS.parallel {
         Some(jobs) => {
