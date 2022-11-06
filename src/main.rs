@@ -119,9 +119,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut commands = Vec::with_capacity(entries.len());
 
     let output_dir = create_output_dir(
-        ARGS.output_path
-            .as_deref()
-            .unwrap_or_else(|| entries[0].parent().expect("entry should not be `/`")),
+        // Path::new is free (a transmute). Clippy is wrong.
+        #[allow(clippy::or_fun_call)]
+        ARGS.output_path.as_deref().unwrap_or(Path::new(".")),
         &tv_options,
     )?;
 
