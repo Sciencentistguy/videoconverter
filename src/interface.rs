@@ -46,6 +46,14 @@ pub struct Args {
     #[clap(long)]
     pub reencode_audio: bool,
 
+    /// Audio language to keep, usually in the form of an ISO 639-2 code
+    #[clap(long, default_value("eng"), conflicts_with("all_streams"))]
+    pub audio_language: String,
+
+    /// Subtutle language to keep, usually in the form of an ISO 639-2 code
+    #[clap(long, default_value("eng"), conflicts_with("all_streams"))]
+    pub subtitle_language: String,
+
     /// Enable reencoding of subtitles
     #[clap(long)]
     pub reencode_subs: bool,

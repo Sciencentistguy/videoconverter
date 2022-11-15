@@ -153,7 +153,8 @@ pub fn parse_stream_metadata(file: Input) -> Vec<Stream> {
         .filter_map(|stream| {
             let index = stream.index();
             let codec_parameters = stream.parameters();
-            let codec_context = ffmpeg::codec::context::Context::from_parameters(codec_parameters.clone()).unwrap();
+            let codec_context =
+                ffmpeg::codec::context::Context::from_parameters(codec_parameters.clone()).unwrap();
             // let codec_context = stream.codec();
             let tags = stream.metadata();
 
@@ -181,13 +182,13 @@ pub fn get_stream_mappings(parsed: &[Stream]) -> StreamMappings {
             }
 
             Stream::Audio(x) => {
-                if x.lang.as_deref() == Some("eng") || ARGS.all_streams {
+                if x.lang.as_deref() == Some(&ARGS.audio_language) || ARGS.all_streams {
                     audios.push(Stream::Audio(x.clone()));
                 }
             }
 
             Stream::Subtitle(x) => {
-                if x.lang.as_deref() == Some("eng") || ARGS.all_streams {
+                if x.lang.as_deref() == Some(&ARGS.subtitle_language) || ARGS.all_streams {
                     subtitles.push(Stream::Subtitle(x.clone()));
                 }
             }
