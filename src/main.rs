@@ -1,7 +1,7 @@
 extern crate ffmpeg_next as ffmpeg;
 
 use std::{
-    io,
+    io, iter,
     os::unix::prelude::OsStrExt,
     path::{Path, PathBuf},
     time::Duration,
@@ -209,6 +209,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         info!(?command);
         commands.push(command);
+    }
+
+    if ARGS.print_commands {
+        for command in &commands {
+            let cmd = iter::once(command.get_program())
+                .chain(command.get_args())
+                .map(|x| x.to_string_lossy())
+                .map(shell_escape::escape)
+                .collect::<Vec<_>>()
+                .join(" ");
+            println!("{}", cmd);
+        }
+        println!();
     }
 
     if ARGS.simulate {

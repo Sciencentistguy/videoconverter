@@ -6,6 +6,7 @@ use crate::state;
 use crate::util;
 use crate::ARGS;
 
+use clap::builder::ArgPredicate;
 use clap::Parser;
 use clap::ValueEnum;
 use question::Answer;
@@ -71,8 +72,16 @@ pub struct Args {
     pub no_hwaccel: bool,
 
     /// Do not actually perform the conversion
-    #[clap(short, long)]
+    #[clap(
+        short,
+        long,
+        default_value_if("print_commands", ArgPredicate::IsPresent, "true")
+    )]
     pub simulate: bool,
+
+    /// Print the ffmpeg command(s) that would be run. Implies `--simulate`
+    #[clap(long)]
+    pub print_commands: bool,
 
     /// Specify libx264 tune. Has no effect with Nvenc.
     #[clap(short, long, ignore_case = true, value_enum)]

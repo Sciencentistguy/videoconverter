@@ -17,3 +17,4 @@ regex = "1.7.0"
 question = "0.2.2"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 strum = { version = "0.24.1", features = ["derive"] }
+shell-escape = "0.1.5"
