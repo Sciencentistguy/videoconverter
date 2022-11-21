@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-mod ffmpeg_backend;
+mod command;
 mod input;
 mod interface;
 mod state;
@@ -127,7 +127,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for input_filepath in &entries {
         let output_filename =
-            ffmpeg_backend::generate_output_filename(&input_filepath, &tv_options);
+            command::generate_output_filename(&input_filepath, &tv_options);
         let output_path = output_dir.join(output_filename);
 
         if let Some(ref mut tv_options) = tv_options {
@@ -200,7 +200,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         println!();
 
-        let command = ffmpeg_backend::generate_ffmpeg_command(
+        let command = command::generate_ffmpeg_command(
             input_filepath,
             &output_path,
             stream_mappings,
