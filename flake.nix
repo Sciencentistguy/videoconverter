@@ -51,9 +51,14 @@
               rustPlatform.bindgenHook
             ];
 
-            buildInputs = [
-              ffmpeg
-            ];
+            buildInputs = with pkgs; (
+              [
+                ffmpeg
+              ]
+              ++ lib.optionals (stdenv.isDarwin) [
+                libiconv
+              ]
+            );
 
             inherit ffmpeg;
 
