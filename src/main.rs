@@ -1,10 +1,10 @@
 extern crate ffmpeg_next as ffmpeg;
 
 use std::{
+    error::Error,
     io, iter,
     os::unix::prelude::OsStrExt,
     path::{Path, PathBuf},
-    time::Duration,
 };
 
 mod command;
@@ -15,9 +15,11 @@ mod util;
 
 use clap::Parser;
 use ffmpeg::ChannelLayout;
+use futures::{stream::FuturesUnordered, StreamExt};
 use interface::TVOptions;
 use once_cell::sync::Lazy;
 use question::Answer;
+use tokio::{process::Command, runtime::Runtime};
 use tracing::*;
 use tracing_subscriber::EnvFilter;
 
@@ -46,7 +48,7 @@ fn create_output_dir(path: &Path, tv_options: &Option<TVOptions>) -> io::Result<
     Ok(output_dir)
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     ffmpeg::init()?;
 
     tracing_subscriber::fmt()
@@ -126,8 +128,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     for input_filepath in &entries {
-        let output_filename =
-            command::generate_output_filename(&input_filepath, &tv_options);
+        let output_filename = command::generate_output_filename(&input_filepath, &tv_options);
         let output_path = output_dir.join(output_filename);
 
         if let Some(ref mut tv_options) = tv_options {
@@ -213,6 +214,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if ARGS.print_commands {
         for command in &commands {
+            let command = command.as_std();
             let cmd = iter::once(command.get_program())
                 .chain(command.get_args())
                 .map(|x| x.to_string_lossy())
@@ -237,47 +239,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    match ARGS.parallel {
-        Some(jobs) => {
-            let jobs = jobs.unwrap_or(usize::MAX);
-            let mut running = Vec::new();
-            'outer: loop {
-                while running.len() < jobs && !commands.is_empty() {
-                    let mut command = commands.pop().unwrap();
-                    let child = command.spawn()?;
-                    running.push(child);
-                }
+    let rt = Runtime::new()?;
+    rt.block_on(run_commands(commands))
+}
 
-                if running.is_empty() {
-                    break;
-                }
-
-                for i in 0..running.len() {
-                    let child = match running.get_mut(i) {
-                        Some(x) => x,
-                        None => continue 'outer,
-                    };
-                    match child.try_wait()? {
-                        Some(status) => {
-                            if !status.success() {
-                                for proc in &mut running {
-                                    proc.kill()?;
-                                }
-                                eprintln!("Command failed");
-                                return Ok(());
-                            }
-                            running.remove(i);
-                        }
-                        None => {}
-                    }
-                }
-                std::thread::sleep(Duration::from_secs(10));
+async fn run_commands(commands: Vec<Command>) -> Result<(), Box<dyn Error>> {
+    if !ARGS.parallel {
+        for (i, mut command) in commands.into_iter().enumerate() {
+            let mut handle = command.spawn()?;
+            let status = handle.wait().await?;
+            if !status.success() {
+                error!(
+                    "Command {i} failed with status code {}",
+                    status.code().unwrap()
+                );
             }
         }
-        None => {
-            for mut command in commands {
-                command.spawn()?.wait()?;
-            }
+        return Ok(());
+    }
+
+    let mut handles = commands
+        .into_iter()
+        .map(|mut command| command.spawn())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut futs: FuturesUnordered<_> = handles.iter_mut().map(|x| x.wait()).collect();
+
+    while let Some(status) = futs.next().await {
+        let status = status?;
+        if !status.success() {
+            error!("Command failed with status code {}", status.code().unwrap());
         }
     }
 

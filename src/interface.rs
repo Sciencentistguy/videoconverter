@@ -104,8 +104,8 @@ pub struct Args {
     pub statefile: PathBuf,
 
     /// Spawn each ffmpeg command concurrently.
-    #[clap(short, long, value_name = "MAX_JOBS")]
-    pub parallel: Option<Option<usize>>,
+    #[clap(short, long)]
+    pub parallel: bool,
 
     /// Sets the default language to the first stream with the given language code.
     #[clap(long, value_name = "language")]

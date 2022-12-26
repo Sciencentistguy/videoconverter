@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::iter::Iterator;
 use std::path::Path;
-use std::process::Command;
 
 use crate::input::FieldOrder;
 use crate::input::Stream;
@@ -12,6 +11,7 @@ use crate::ARGS;
 
 use ffmpeg::codec;
 use itertools::Itertools;
+use tokio::process::Command;
 use tracing::*;
 
 const FFMPEG_BIN_PATH: &str = "ffmpeg";
@@ -74,7 +74,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     output_path: P,
     mappings: StreamMappings,
     target_codecs: HashMap<usize, Option<codec::Id>>,
-) -> std::process::Command {
+) -> Command {
     let mut command = Command::new(FFMPEG_BIN_PATH);
     command.arg("-hide_banner"); // Remove gpl banner
 
