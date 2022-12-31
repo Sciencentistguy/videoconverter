@@ -1,4 +1,4 @@
-use crate::interface::TVOptions;
+use crate::tv::TVOptions;
 use crate::ARGS;
 
 use std::{

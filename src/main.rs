@@ -11,17 +11,18 @@ mod command;
 mod input;
 mod interface;
 mod state;
+mod tv;
 mod util;
 
 use clap::Parser;
 use ffmpeg::ChannelLayout;
 use futures::{stream::FuturesUnordered, StreamExt};
-use interface::TVOptions;
 use once_cell::sync::Lazy;
 use question::Answer;
 use tokio::{process::Command, runtime::Runtime};
 use tracing::*;
 use tracing_subscriber::EnvFilter;
+use tv::TVOptions;
 
 use crate::input::Stream;
 
@@ -55,7 +56,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    interface::validate_args(&ARGS);
+    ARGS.validate();
 
     debug!(?ARGS);
 
@@ -65,7 +66,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL);
     }
 
-    let mut tv_options = interface::get_tv_options();
+    let mut tv_options = TVOptions::from_cli();
 
     if let Some(ref tv_options) = tv_options {
         if let Err(e) = state::write_state(tv_options) {

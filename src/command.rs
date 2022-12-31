@@ -5,8 +5,8 @@ use std::path::Path;
 use crate::input::FieldOrder;
 use crate::input::Stream;
 use crate::input::StreamMappings;
-use crate::interface::TVOptions;
 use crate::interface::VideoEncoder;
+use crate::tv::TVOptions;
 use crate::ARGS;
 
 use ffmpeg::codec;
