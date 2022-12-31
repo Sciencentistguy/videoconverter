@@ -135,11 +135,23 @@ impl FromStr for CropFilter {
     type Err = &'static str;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
-        let r = Regex::new(r"crop=\d\+:\d\+:\d\+:\d\+").unwrap();
-        if !r.is_match(input) {
-            return Err("Crop filter must be of the form `crop=height:width:x:y`");
+        let r = Regex::new(r"^crop=(\d+):(\d+):(\d+):(\d+)$").unwrap();
+        let capts = r
+            .captures(input)
+            .ok_or("Error: Crop filter must be of the form `crop=height:width:x:y`")?;
+
+        let height = capts.get(1).unwrap().as_str();
+        let width = capts.get(2).unwrap().as_str();
+        let x = capts.get(3).unwrap().as_str();
+        let y = capts.get(4).unwrap().as_str();
+
+        if x > width {
+            return Err("Crop x value cannot be greater than width");
         }
-        // TODO check that its a sane crop string
+        if y > height {
+            return Err("Crop y value cannot be greater than height");
+        }
+
         Ok(Self(input.to_owned()))
     }
 }
