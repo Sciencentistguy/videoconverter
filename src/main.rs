@@ -164,6 +164,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             print!("Mapping stream {index}: {oldcodec:?} ");
 
+            if let Some(title) = stream
+                .as_audio()
+                .map(|x| x.title.as_deref())
+                .or_else(|| stream.as_subtitle().map(|x| x.title.as_deref()))
+            {
+                print!("'{}' ", title.unwrap_or("[untitled]"));
+            }
+
             if let Stream::Audio(audio) = stream {
                 if audio.channel_layout == ChannelLayout::STEREO {
                     print!("(2.0) ");

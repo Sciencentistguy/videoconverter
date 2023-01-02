@@ -33,6 +33,7 @@ pub struct Audio {
     pub channels: u16,
     pub channel_layout: ChannelLayout,
     pub profile: Option<ffmpeg::codec::Profile>,
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -40,6 +41,7 @@ pub struct Subtitle {
     pub index: usize,
     pub codec: codec::Id,
     pub lang: Option<String>,
+    pub title: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -120,6 +122,7 @@ impl Stream {
             codec::Profile::Unknown => None,
             x => Some(x),
         };
+        let title = tags.get("title").map(|x| x.to_string());
 
         Self::Audio(Audio {
             index,
@@ -128,14 +131,29 @@ impl Stream {
             channels,
             channel_layout,
             profile,
+            title,
         })
     }
 
     fn subtitle(index: usize, codec_parameters: Parameters, tags: ffmpeg::DictionaryRef) -> Stream {
         let codec = codec_parameters.id();
         let lang = tags.get("language").map(|f| f.to_string());
+        let title = tags.get("title").map(|x| x.to_string());
 
-        Self::Subtitle(Subtitle { index, codec, lang })
+        Self::Subtitle(Subtitle {
+            index,
+            codec,
+            lang,
+            title,
+        })
+    }
+
+    pub fn as_subtitle(&self) -> Option<&Subtitle> {
+        if let Self::Subtitle(v) = self {
+            Some(v)
+        } else {
+            None
+        }
     }
 }
 
