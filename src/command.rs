@@ -99,8 +99,14 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         }
     };
 
-    let reencoding_video =
-        target_codecs[&video_stream.index].is_some() || ARGS.force_reencode_video;
+    // Reencode video if:
+    // - The video codec is not the same as the target codec
+    // - `--deinterlace` is passed
+    // - `--force-reencode` is passed
+    let reencoding_video = target_codecs[&video_stream.index].is_some()
+        || ARGS.force_deinterlace
+        || ARGS.force_reencode_video;
+
     let reencoding_audio = mappings
         .audio
         .iter()
