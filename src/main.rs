@@ -1,13 +1,9 @@
 extern crate ffmpeg_next as ffmpeg;
 
-use std::{
-    error::Error,
-    io, iter,
-    os::unix::prelude::OsStrExt,
-    path::{Path, PathBuf},
-};
+use std::{error::Error, iter, os::unix::prelude::OsStrExt, path::Path};
 
 mod command;
+mod directory;
 mod input;
 mod interface;
 mod state;
@@ -24,30 +20,13 @@ use tracing::*;
 use tracing_subscriber::EnvFilter;
 use tv::TVOptions;
 
-use crate::input::Stream;
+use crate::{directory::OutputDir, input::Stream};
 
 static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);
 
 const EXEMPT_FILE_EXTENSIONS: [&str; 11] = [
     "clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt",
 ];
-
-fn create_output_dir(path: &Path, tv_options: &Option<TVOptions>) -> io::Result<PathBuf> {
-    let output_dir = if let Some(ref tv_options) = tv_options {
-        path.join(format!("Season {:02}", tv_options.season))
-    } else {
-        path.join("newfiles")
-    };
-
-    if output_dir.is_dir() {
-        info!(dir = ?output_dir, "Directory already exists");
-    } else {
-        std::fs::create_dir(&output_dir)?;
-        info!(dir = ?output_dir, "Created directory");
-    }
-
-    Ok(output_dir)
-}
 
 fn main() -> Result<(), Box<dyn Error>> {
     ffmpeg::init()?;
@@ -121,16 +100,16 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let mut commands = Vec::with_capacity(entries.len());
 
-    let output_dir = create_output_dir(
+    let output_dir = OutputDir::new(
         // Path::new is free (a transmute). Clippy is wrong.
         #[allow(clippy::or_fun_call)]
         ARGS.output_path.as_deref().unwrap_or(Path::new(".")),
         &tv_options,
-    )?;
+    );
 
     for input_filepath in &entries {
         let output_filename = command::generate_output_filename(&input_filepath, &tv_options);
-        let output_path = output_dir.join(output_filename);
+        let output_path = output_dir.0.join(output_filename);
 
         if let Some(ref mut tv_options) = tv_options {
             tv_options.episode += 1;
@@ -236,9 +215,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     if ARGS.simulate {
-        if let Err(e) = std::fs::remove_dir(output_dir) {
-            warn!(error=%e, "Failed to remove output directory. It may not be empty");
-        }
         eprintln!("Simulate mode; not executing commands");
         return Ok(());
     }
@@ -247,6 +223,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         eprintln!("Aborting");
         return Ok(());
     }
+
+    output_dir.create().unwrap();
 
     let rt = Runtime::new()?;
     rt.block_on(run_commands(commands))
