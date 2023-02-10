@@ -86,7 +86,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let is_rar_segment = file_extension.starts_with('r')
                     && file_extension[1..].chars().all(|c| c.is_ascii_digit());
 
-                !(EXEMPT_FILE_EXTENSIONS.contains(&file_extension) || is_rar_segment)
+                !(ARGS.ignored_extensions.iter().any(|ignored| file_extension.ends_with(ignored))
+                    || EXEMPT_FILE_EXTENSIONS.contains(&file_extension)
+                    || is_rar_segment)
             })
             .collect();
         v.sort_unstable();

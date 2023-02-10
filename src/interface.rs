@@ -103,7 +103,7 @@ pub struct Args {
     pub parallel: bool,
 
     /// Sets the default language to the first stream with the given language code.
-    #[clap(long, value_name = "language")]
+    #[clap(long, value_name = "LANGUAGE")]
     pub default_audio_language: Option<String>,
 
     /// Weights file for nnedi3 deinterlace filter
@@ -113,6 +113,10 @@ pub struct Args {
     /// Overwrite output file, instead of erroring out.
     #[clap(long)]
     pub overwrite: bool,
+
+    /// File extension to ignore. Can be specified multiple times.
+    #[clap(long = "ignore", action = clap::ArgAction::Append, value_name = "EXTENSION")]
+    pub ignored_extensions: Vec<String>,
 }
 
 impl Args {
