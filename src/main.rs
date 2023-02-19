@@ -40,7 +40,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     debug!(?ARGS);
 
     // Shut libav* up
-    // Safety: Calling c function, modifying global state
+    // Safety: No other threads exist, mutating global state is fine.
     unsafe {
         ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL);
     }
@@ -86,7 +86,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let is_rar_segment = file_extension.starts_with('r')
                     && file_extension[1..].chars().all(|c| c.is_ascii_digit());
 
-                !(ARGS.ignored_extensions.iter().any(|ignored| file_extension.ends_with(ignored))
+                !(ARGS
+                    .ignored_extensions
+                    .iter()
+                    .any(|ignored| file_extension.ends_with(ignored))
                     || EXEMPT_FILE_EXTENSIONS.contains(&file_extension)
                     || is_rar_segment)
             })
@@ -221,7 +224,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    if !util::confirm("Continue?", Some(Answer::YES)) {
+    if ARGS.yes || !util::confirm("Continue?", Some(Answer::YES)) {
         eprintln!("Aborting");
         return Ok(());
     }

@@ -48,8 +48,8 @@ pub fn read_state() -> Option<TVOptions> {
 
     Some(TVOptions {
         title: std::mem::take(&mut lines[0]),
-        season: lines[1].parse::<usize>().ok()?,
-        episode: lines[2].parse::<usize>().ok()?,
+        season: lines[1].parse::<u32>().ok()?,
+        episode: lines[2].parse::<u32>().ok()?,
     })
 }
 

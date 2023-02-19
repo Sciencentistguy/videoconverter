@@ -1,18 +1,27 @@
 use question::Answer;
+use tracing::trace;
 
 use crate::{state, util, ARGS};
 
 #[derive(Debug)]
 pub struct TVOptions {
     pub title: String,
-    pub season: usize,
-    pub episode: usize,
+    pub season: u32,
+    pub episode: u32,
 }
 
 impl TVOptions {
     pub fn from_cli() -> Option<Self> {
-        let enabled = ARGS.tv_mode || util::confirm("TV Show Mode", Some(Answer::NO));
-        if !enabled {
+        if ARGS.tv_mode {
+            trace!("TV Mode enabled via args");
+            return Some(TVOptions {
+                title: ARGS.title.clone().unwrap(),
+                season: ARGS.season.unwrap(),
+                episode: ARGS.episode.unwrap(),
+            });
+        }
+
+        if !util::confirm("TV Show Mode", Some(Answer::NO)) {
             return None;
         }
 
@@ -59,7 +68,7 @@ impl TVOptions {
 
             if season.is_none() {
                 season = loop {
-                    match util::prompt("Enter the season index of the TV show:").parse::<usize>() {
+                    match util::prompt("Enter the season index of the TV show:").parse::<u32>() {
                         Ok(x) => break Some(x),
                         Err(_) => {
                             println!("Invalid response. Please try again.");
@@ -73,7 +82,7 @@ impl TVOptions {
 
         let episode = loop {
             if let Ok(x) = util::prompt("Enter the index of the first episode in this directory:")
-                .parse::<usize>()
+                .parse::<u32>()
             {
                 break x;
             }
@@ -88,11 +97,11 @@ impl TVOptions {
 }
 
 trait TransposeTvOptions {
-    fn transpose(self) -> (Option<String>, Option<usize>, Option<usize>);
+    fn transpose(self) -> (Option<String>, Option<u32>, Option<u32>);
 }
 
 impl TransposeTvOptions for Option<TVOptions> {
-    fn transpose(self) -> (Option<String>, Option<usize>, Option<usize>) {
+    fn transpose(self) -> (Option<String>, Option<u32>, Option<u32>) {
         match self {
             Some(TVOptions {
                 title,

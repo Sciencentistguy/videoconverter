@@ -94,6 +94,18 @@ pub struct Args {
     #[clap(long, short = 'T')]
     pub tv_mode: bool,
 
+    /// The season number to use in TV mode
+    #[clap(long, required_if_eq("tv_mode", "true"))]
+    pub season: Option<u32>,
+
+    /// The episode number to use in TV mode
+    #[clap(long, required_if_eq("tv_mode", "true"))]
+    pub episode: Option<u32>,
+
+    /// The title to use in TV mode
+    #[clap(long, required_if_eq("tv_mode", "true"))]
+    pub title: Option<String>,
+
     /// The path for the statefile
     #[clap(long, default_value = "/tmp/videoconverter.state")]
     pub statefile: PathBuf,
@@ -117,6 +129,10 @@ pub struct Args {
     /// File extension to ignore. Can be specified multiple times.
     #[clap(long = "ignore", action = clap::ArgAction::Append, value_name = "EXTENSION")]
     pub ignored_extensions: Vec<String>,
+
+    /// Do not prompt for confirmation before performing the conversion.
+    #[clap(long, short, conflicts_with = "simulate")]
+    pub yes: bool,
 }
 
 impl Args {
