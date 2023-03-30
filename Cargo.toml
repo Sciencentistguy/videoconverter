@@ -19,4 +19,4 @@ tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 strum = { version = "0.24.1", features = ["derive"] }
 shell-escape = "0.1.5"
 tokio = { version = "1.27.0", features = ["full"] }
-futures = "0.3.27"
+futures = "0.3.28"
