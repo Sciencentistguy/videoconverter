@@ -20,3 +20,4 @@ strum = { version = "0.25.0", features = ["derive"] }
 shell-escape = "0.1.5"
 tokio = { version = "1.28.2", features = ["full"] }
 futures = "0.3.28"
+walkdir = "2.3.3"

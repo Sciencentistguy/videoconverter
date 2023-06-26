@@ -165,7 +165,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     command.arg(input_path.as_ref().as_os_str());
 
     // With large files this is needed to avoid an ffmpeg crash
-    command.args(&["-max_muxing_queue_size", "16384"]);
+    command.args(["-max_muxing_queue_size", "16384"]);
 
     let generate_codec_args =
         |command: &mut Command, stream_type: char, index_in: usize, index_out: usize| {
@@ -222,7 +222,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
                 }
             }
             VideoEncoder::Nvenc => {
-                command.args(&["-rc", "constqp", "-qp"]);
+                command.args(["-rc", "constqp", "-qp"]);
                 command.arg(ARGS.crf.to_string());
                 command.args(NVENC_FLAGS);
             }

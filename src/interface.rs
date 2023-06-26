@@ -133,6 +133,11 @@ pub struct Args {
     /// Do not prompt for confirmation before performing the conversion.
     #[clap(long, short, conflicts_with = "simulate")]
     pub yes: bool,
+
+    /// The max depth to traverse when searching for files. Note: this does not effect the output
+    /// file location
+    #[clap(long, default_value = "1")]
+    pub depth: usize,
 }
 
 impl Args {

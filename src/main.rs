@@ -19,6 +19,7 @@ use tokio::{process::Command, runtime::Runtime};
 use tracing::*;
 use tracing_subscriber::EnvFilter;
 use tv::TVOptions;
+use walkdir::WalkDir;
 
 use crate::{directory::OutputDir, input::Stream};
 
@@ -63,25 +64,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     let entries = if path.is_file() {
         vec![path]
     } else if path.is_dir() {
-        let mut v: Vec<_> = std::fs::read_dir(&path)?
-            .map(|entry| entry.unwrap().path())
-            .filter(|path| !path.is_dir()) // Remove directories
-            .filter(|path| {
-                // Remove files that start with '.'
-                !path
-                    .file_name()
-                    .map(|filename| filename.as_bytes().starts_with(b"."))
-                    .unwrap_or(true) // Remove files that have no filename (?)
-            })
+        let mut v = WalkDir::new(path)
+            .max_depth(ARGS.depth)
+            .into_iter()
+            .filter_map(|path| path.ok())
+            .map(|x| x.path().to_owned())
+            .filter(|x| x.is_file())
+            .filter(
+                |path| !path.file_name().unwrap(/* all files have names */).as_bytes().starts_with(b"."), // Remove files that have no filename (?)
+            )
             .filter(|path| {
                 // Remove files with extensions that are exempt
-                let file_extension = match path.extension().and_then(|x| x.to_str()) {
-                    Some(x) => x,
-                    None => {
-                        // Remove filles with no extension
-                        return false;
-                    }
-                };
+                let Some(file_extension) = path.extension().and_then(|x| x.to_str())
+                else { return false; }; //Remove filles with no extension
+
                 // Remove files of the form `*.r00`, `*.r01`, etc
                 let is_rar_segment = file_extension.starts_with('r')
                     && file_extension[1..].chars().all(|c| c.is_ascii_digit());
@@ -93,8 +89,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                     || EXEMPT_FILE_EXTENSIONS.contains(&file_extension)
                     || is_rar_segment)
             })
-            .collect();
-        v.sort_unstable();
+            .collect::<Vec<_>>();
+
+        v.sort_unstable_by(|a, b| a.file_name().cmp(&b.file_name()));
         v
     } else {
         error!("Provided path must be either a file or a directory");
@@ -113,7 +110,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     );
 
     for input_filepath in &entries {
-        let output_filename = command::generate_output_filename(&input_filepath, &tv_options);
+        let output_filename = command::generate_output_filename(input_filepath, &tv_options);
         let output_path = output_dir.0.join(output_filename);
 
         if let Some(ref mut tv_options) = tv_options {
