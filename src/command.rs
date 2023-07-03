@@ -72,7 +72,7 @@ impl GetEncoderExt for codec::Id {
 pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     input_path: P,
     output_path: P,
-    mappings: StreamMappings,
+    mut mappings: StreamMappings,
     target_codecs: HashMap<usize, Option<codec::Id>>,
 ) -> Command {
     let mut command = Command::new(FFMPEG_BIN_PATH);
@@ -273,13 +273,14 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         generate_codec_args(&mut command, 's', stream.index(), out_index);
     }
 
-    if let Some(lang) = &ARGS.default_audio_language {
+    if let Some(lang) = ARGS.default_audio_language.as_deref() {
         match mappings
             .audio
             .iter()
             .enumerate()
-            .find(|(_, stream)| stream.as_audio().and_then(|x| x.lang.as_deref()) == Some(lang))
-            .map(|x| x.0)
+            .filter(|(_, stream)| stream.as_audio().and_then(|x| x.lang.as_deref()) == Some(lang))
+            .map(|(idx, _)| idx)
+            .nth(ARGS.default_audio_stream)
         {
             None => {
                 error!(
@@ -288,15 +289,53 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
                 );
             }
             Some(target_stream_idx) => {
-                for stream_idx in 0..mappings.audio.len() {
-                    if stream_idx == target_stream_idx {
-                        continue;
-                    }
+                if mappings.audio.len() > 1 {
+                    // Move the chosen stream to the front
+                    mappings.audio.swap(0, target_stream_idx);
+                }
+
+                // Set the default disposition for all audio streams to 0 (not default)
+                for stream_idx in 1..mappings.audio.len() {
                     command.arg(format!("-disposition:a:{}", stream_idx));
                     command.arg("0");
                 }
 
-                command.arg(format!("-disposition:a:{}", target_stream_idx));
+                // Then mark the first stream as default
+                command.arg("-disposition:a:0");
+                command.arg("default");
+            }
+        }
+    }
+
+    if let Some(lang) = ARGS.default_subtitle_language.as_deref() {
+        match mappings
+            .subtitle
+            .iter()
+            .enumerate()
+            .filter(|(_, stream)| stream.as_subtitle().and_then(|x| x.lang.as_deref()) == Some(lang))
+            .map(|(idx, _)| idx)
+            .nth(ARGS.default_subtitle_stream)
+        {
+            None => {
+                error!(
+                    filename = ?input_path.as_ref(),
+                    "Stream with language {lang} could not be found. Has it been discarded?"
+                );
+            }
+            Some(target_stream_idx) => {
+                if mappings.subtitle.len() > 1 {
+                    // Move the chosen stream to the front
+                    mappings.subtitle.swap(0, target_stream_idx);
+                }
+                
+                // Set the default disposition for all subtitle streams to 0 (not default)
+                for stream_idx in 1..mappings.subtitle.len() {
+                    command.arg(format!("-disposition:s:{}", stream_idx));
+                    command.arg("0");
+                }
+
+                // Then mark the first stream as default
+                command.arg("-disposition:s:0");
                 command.arg("default");
             }
         }

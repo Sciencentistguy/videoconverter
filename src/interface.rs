@@ -114,9 +114,23 @@ pub struct Args {
     #[clap(short, long)]
     pub parallel: bool,
 
-    /// Sets the default language to the first stream with the given language code.
+    /// Moves the `default_audio_stream`th audio stream with the given language code to the front, and marks it as
+    /// default.
     #[clap(long, value_name = "LANGUAGE")]
     pub default_audio_language: Option<String>,
+
+    /// Moves the `default_subtitle_stream`th subtitle stream with the given language code to the front, and marks it as
+    /// default.
+    #[clap(long, value_name = "LANGUAGE")]
+    pub default_subtitle_language: Option<String>,
+
+    /// Works in conjunction with `default_subtitle_language`.
+    #[clap(long, value_name = "INDEX", default_value = "0")]
+    pub default_audio_stream: usize,
+
+    /// Works in conjunction with `default_subtitle_language`.
+    #[clap(long, value_name = "INDEX", default_value = "0")]
+    pub default_subtitle_stream: usize,
 
     /// Weights file for nnedi3 deinterlace filter
     #[clap(long, default_value = "~/.ffmpeg/nnedi3_weights")]
