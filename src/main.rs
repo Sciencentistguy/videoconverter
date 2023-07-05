@@ -59,45 +59,54 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     debug!(?tv_options);
 
-    let path = ARGS.path.canonicalize()?;
+    let entries = {
+        let mut entries = Vec::new();
 
-    let entries = if path.is_file() {
-        vec![path]
-    } else if path.is_dir() {
-        let mut v = WalkDir::new(path)
-            .max_depth(ARGS.depth)
-            .into_iter()
-            .filter_map(|path| path.ok())
-            .map(|x| x.path().to_owned())
-            .filter(|x| x.is_file())
-            .filter(
-                |path| !path.file_name().unwrap(/* all files have names */).as_bytes().starts_with(b"."), // Remove files that have no filename (?)
-            )
-            .filter(|path| {
-                // Remove files with extensions that are exempt
-                let Some(file_extension) = path.extension().and_then(|x| x.to_str())
+        // For each path provided:
+        //  - If it's a file, add it unconditionally - the user knows what they're doing
+        //  - If it's a directory, walk it and add all files in it, if they are compatible
+        // `path` should never be a symlink, as we canonicalize it.
+        for path in ARGS.path.iter().map(|x| x.canonicalize()) {
+            let path = path?;
+
+            if path.is_file() {
+                entries.push(path);
+            } else if path.is_dir() {
+                let it = WalkDir::new(path)
+                    .max_depth(ARGS.depth)
+                    .into_iter()
+                    .filter_map(|path| path.ok())
+                    .map(|x| x.path().to_owned())
+                    .filter(|x| x.is_file())
+                    .filter(
+                        |path| !path.file_name().unwrap(/* all files have names */).as_bytes().starts_with(b"."), // Remove files that have no filename (?)
+                    )
+                    .filter(|path| {
+                        // Remove files with extensions that are exempt
+                        let Some(file_extension) = path.extension().and_then(|x| x.to_str())
                 else { return false; }; //Remove filles with no extension
 
-                // Remove files of the form `*.r00`, `*.r01`, etc
-                let is_rar_segment = file_extension.starts_with('r')
-                    && file_extension[1..].chars().all(|c| c.is_ascii_digit());
+                        // Remove files of the form `*.r00`, `*.r01`, etc
+                        let is_rar_segment = file_extension.starts_with('r')
+                            && file_extension[1..].chars().all(|c| c.is_ascii_digit());
 
-                !(ARGS
-                    .ignored_extensions
-                    .iter()
-                    .any(|ignored| file_extension.ends_with(ignored))
-                    || EXEMPT_FILE_EXTENSIONS.contains(&file_extension)
-                    || is_rar_segment)
-            })
-            .collect::<Vec<_>>();
+                        !(ARGS
+                            .ignored_extensions
+                            .iter()
+                            .any(|ignored| file_extension.ends_with(ignored))
+                            || EXEMPT_FILE_EXTENSIONS.contains(&file_extension)
+                            || is_rar_segment)
+                    });
 
-        v.sort_unstable_by(|a, b| a.file_name().cmp(&b.file_name()));
-        v
-    } else {
-        error!("Provided path must be either a file or a directory");
-        std::process::exit(1);
+                entries.extend(it);
+            } else {
+                error!("Provided path must be either a file or a directory");
+                std::process::exit(1);
+            };
+        }
+        entries.sort_unstable_by(|a, b| a.file_name().cmp(&b.file_name()));
+        entries
     };
-
     debug!(?entries);
 
     let mut commands = Vec::with_capacity(entries.len());
