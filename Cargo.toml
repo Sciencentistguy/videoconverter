@@ -10,7 +10,7 @@ edition = "2021"
 clap = { version = "4.3.11", features = ["derive"] }
 itertools = "0.11.0"
 ffmpeg-next = "5.1.1"
-ffmpeg-sys-next = "5.1.1"
+ffmpeg-sys-next = "6.0.1"
 once_cell = "1.18.0"
 tracing = "0.1.38"
 regex = "1.9.1"
