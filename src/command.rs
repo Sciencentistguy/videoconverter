@@ -74,7 +74,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     output_path: P,
     mut mappings: StreamMappings,
     target_codecs: HashMap<usize, Option<codec::Id>>,
-) -> Command {
+) -> Result<Command, CommandError> {
     let mut command = Command::new(FFMPEG_BIN_PATH);
     command.arg("-hide_banner"); // Remove gpl banner
 
@@ -85,9 +85,9 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             );
         } else {
             error!(file = ?output_path.as_ref().to_string_lossy(),
-                "Output file already exists. Exiting"
+                "Output file already exists."
             );
-            std::process::exit(1);
+            return Err(CommandError::FileExists);
         }
     }
 
@@ -312,7 +312,9 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             .subtitle
             .iter()
             .enumerate()
-            .filter(|(_, stream)| stream.as_subtitle().and_then(|x| x.lang.as_deref()) == Some(lang))
+            .filter(|(_, stream)| {
+                stream.as_subtitle().and_then(|x| x.lang.as_deref()) == Some(lang)
+            })
             .map(|(idx, _)| idx)
             .nth(ARGS.default_subtitle_stream)
         {
@@ -327,7 +329,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
                     // Move the chosen stream to the front
                     mappings.subtitle.swap(0, target_stream_idx);
                 }
-                
+
                 // Set the default disposition for all subtitle streams to 0 (not default)
                 for stream_idx in 1..mappings.subtitle.len() {
                     command.arg(format!("-disposition:s:{}", stream_idx));
@@ -349,5 +351,10 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
 
     command.arg(output_path.as_ref().as_os_str());
 
-    command
+    Ok(command)
+}
+
+#[derive(Debug)]
+pub enum CommandError {
+    FileExists,
 }

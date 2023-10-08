@@ -152,6 +152,10 @@ pub struct Args {
     /// file location
     #[clap(long, default_value = "1")]
     pub depth: usize,
+
+    /// Continue processing items on error.
+    #[clap(long = "continue")]
+    pub continue_processing: bool
 }
 
 impl Args {

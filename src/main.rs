@@ -21,7 +21,7 @@ use tracing_subscriber::EnvFilter;
 use tv::TVOptions;
 use walkdir::WalkDir;
 
-use crate::{directory::OutputDir, input::Stream};
+use crate::{command::CommandError, directory::OutputDir, input::Stream};
 
 static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);
 
@@ -118,6 +118,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         &tv_options,
     );
 
+    let mut errored_paths = Vec::new();
+
     for input_filepath in &entries {
         let output_filename = command::generate_output_filename(input_filepath, &tv_options);
         let output_path = output_dir.0.join(output_filename);
@@ -208,7 +210,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         );
 
         info!(?command);
-        commands.push(command);
+        match command {
+            Ok(command) => commands.push(command),
+            Err(CommandError::FileExists) => {
+                if !ARGS.continue_processing {
+                    std::process::exit(1);
+                }
+                errored_paths.push(input_filepath);
+                continue;
+            }
+        }
     }
 
     if ARGS.print_commands {
@@ -238,7 +249,16 @@ fn main() -> Result<(), Box<dyn Error>> {
     output_dir.create().unwrap();
 
     let rt = Runtime::new()?;
-    rt.block_on(run_commands(commands))
+    rt.block_on(run_commands(commands))?;
+
+    if !errored_paths.is_empty() {
+        eprintln!("Errors occured in {} paths:", errored_paths.len());
+        for p in errored_paths {
+            eprintln!("  {}", p.display());
+        }
+    }
+
+    Ok(())
 }
 
 async fn run_commands(commands: Vec<Command>) -> Result<(), Box<dyn Error>> {
