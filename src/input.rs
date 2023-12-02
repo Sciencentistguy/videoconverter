@@ -94,6 +94,8 @@ impl Stream {
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_BT) => FieldOrder::Interlaced,
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_BB) => FieldOrder::Interlaced,
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_UNKNOWN) => FieldOrder::Unknown,
+            Ok(_) => FieldOrder::Unknown,
+            
             Err(x) => {
                 error!(stream = %index, err = ?x, "Error getting field order");
                 FieldOrder::Unknown

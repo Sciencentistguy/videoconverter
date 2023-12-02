@@ -1,4 +1,4 @@
-extern crate ffmpeg_next as ffmpeg;
+extern crate ffmpeg_the_third as ffmpeg;
 
 use std::{error::Error, iter, os::unix::prelude::OsStrExt, path::Path};
 
