@@ -349,6 +349,12 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         command.arg(format!("0:{}", stream.index()));
     }
 
+    if ARGS.all_streams {
+        // Retain attachments and data
+        command.args(["-map", "0:d:?"]);
+        command.args(["-map", "0:t:?"]);
+    }
+
     command.arg(output_path.as_ref().as_os_str());
 
     Ok(command)
