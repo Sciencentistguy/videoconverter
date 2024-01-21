@@ -13,7 +13,7 @@ ffmpeg-the-third = "1"
 ffmpeg-sys-the-third = "1"
 once_cell = "1.19.0"
 tracing = "0.1.40"
-regex = "1.10.2"
+regex = "1.10.3"
 question = "0.2.2"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 strum = { version = "0.25.0", features = ["derive"] }
