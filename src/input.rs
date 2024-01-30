@@ -95,7 +95,7 @@ impl Stream {
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_BB) => FieldOrder::Interlaced,
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_UNKNOWN) => FieldOrder::Unknown,
             Ok(_) => FieldOrder::Unknown,
-            
+
             Err(x) => {
                 error!(stream = %index, err = ?x, "Error getting field order");
                 FieldOrder::Unknown
@@ -252,6 +252,27 @@ pub fn get_stream_mappings(parsed: &[Stream]) -> StreamMappings {
     }
 }
 
+#[rustfmt::skip]
+fn is_pcm(x: codec::Id) -> bool {
+    use codec::Id::*;
+
+    // List pulled from the definition of codec::Id
+    matches!(
+        x,
+        PCM_S16LE | PCM_S16BE | PCM_U16LE
+        | PCM_U16BE | PCM_S8 | PCM_U8
+        | PCM_MULAW | PCM_ALAW | PCM_S32LE
+        | PCM_S32BE | PCM_U32LE | PCM_U32BE
+        | PCM_S24LE | PCM_S24BE | PCM_U24LE
+        | PCM_U24BE | PCM_S24DAUD | PCM_ZORK
+        | PCM_S16LE_PLANAR | PCM_DVD | PCM_F32BE
+        | PCM_F32LE | PCM_F64BE | PCM_F64LE
+        | PCM_BLURAY | PCM_LXF | S302M
+        | PCM_S8_PLANAR | PCM_S24LE_PLANAR | PCM_S32LE_PLANAR
+        | PCM_S16BE_PLANAR | PCM_S64LE | PCM_S64BE
+    )
+}
+
 pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Option<codec::Id>> {
     use codec::Id::{AAC, DTS, DVD_SUBTITLE, FLAC, H264, HDMV_PGS_SUBTITLE, HEVC, SSA, TRUEHD};
 
@@ -273,6 +294,7 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
                 },
                 Stream::Audio(audio) if ARGS.reencode_audio => match audio.codec {
                     FLAC | AAC => (index, None),
+                    c if is_pcm(c) => (index, Some(FLAC)),
                     TRUEHD => (index, Some(FLAC)),
                     DTS if matches!(
                         audio.profile,
