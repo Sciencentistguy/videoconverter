@@ -12,10 +12,9 @@ mod util;
 
 use clap::Parser;
 use ffmpeg::ChannelLayout;
-use futures::{stream::FuturesUnordered, StreamExt};
 use once_cell::sync::Lazy;
 use question::Answer;
-use tokio::{process::Command, runtime::Runtime};
+use tokio::{process::Command, runtime::Runtime, task::JoinSet};
 use tracing::*;
 use tracing_subscriber::EnvFilter;
 use tv::TVOptions;
@@ -83,12 +82,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                     )
                     .filter(|path| {
                         // Remove files with extensions that are exempt
-                        let Some(file_extension) = path.extension().and_then(|x| x.to_str())
-                else { return false; }; //Remove filles with no extension
+                        let Some(file_extension) = path.extension().and_then(|x| x.to_str()) else {
+                            return false;
+                        }; // Remove filles with no extension
 
                         // Remove files of the form `*.r00`, `*.r01`, etc
-                        let is_rar_segment = file_extension.starts_with('r')
-                            && file_extension[1..].chars().all(|c| c.is_ascii_digit());
+                        let is_rar_segment = matches!(file_extension.strip_prefix('r'), Some(s) if s.chars().all(|c| c.is_ascii_digit()));
 
                         !(ARGS
                             .ignored_extensions
@@ -138,12 +137,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         let codecs = &codec_mappings;
         println!(
             "Input file '{}' -> '{}':",
-            input_filepath
-                .to_str()
-                .expect("Path contained invalid unicode."),
-            output_path
-                .to_str()
-                .expect("Path contained invalid unicode.")
+            input_filepath.display(),
+            output_path.display(),
         );
         for stream in mappings.iter() {
             let index = stream.index();
@@ -276,15 +271,18 @@ async fn run_commands(commands: Vec<Command>) -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    let mut handles = commands
-        .into_iter()
-        .map(|mut command| command.spawn())
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut js = JoinSet::new();
 
-    let mut futs: FuturesUnordered<_> = handles.iter_mut().map(|x| x.wait()).collect();
+    for mut command in commands {
+        let handle = command.spawn()?;
+        js.spawn(async move {
+            let mut handle = handle;
+            handle.wait().await
+        });
+    }
 
-    while let Some(status) = futs.next().await {
-        let status = status?;
+    while let Some(status) = js.join_next().await {
+        let status = status??;
         if !status.success() {
             error!("Command failed with status code {}", status.code().unwrap());
         }

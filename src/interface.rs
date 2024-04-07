@@ -155,7 +155,7 @@ pub struct Args {
 
     /// Continue processing items on error.
     #[clap(long = "continue")]
-    pub continue_processing: bool
+    pub continue_processing: bool,
 }
 
 impl Args {

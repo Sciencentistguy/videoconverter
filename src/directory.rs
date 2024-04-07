@@ -1,4 +1,7 @@
-use std::{path::{Path, PathBuf}, io};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use tracing::info;
 
