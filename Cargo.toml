@@ -7,7 +7,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.4.18", features = ["derive"] }
+clap = { version = "4.5.4", features = ["derive"] }
 itertools = "0.12.1"
 ffmpeg-the-third = "1.2.2"
 ffmpeg-sys-the-third = "1.1.1"
