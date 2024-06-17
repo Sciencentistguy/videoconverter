@@ -195,7 +195,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
             println!();
         }
-        println!();
+        let dropped_audio =
+            parsed.iter().filter(|&x| x.as_audio().is_some()).count() - mappings.audio.len();
+        let dropped_subs =
+            parsed.iter().filter(|&x| x.as_subtitle().is_some()).count() - mappings.subtitle.len();
+        println!("Dropping {dropped_audio} audio streams and {dropped_subs} subtitle streams",);
 
         let command = command::generate_ffmpeg_command(
             input_filepath,
