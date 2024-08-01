@@ -88,7 +88,7 @@
         };
         # Assume that ffmpeg works and I don't need to build it in CI
         packages.videoconverter-ci = pkgs.callPackage videoconverter {
-          ffmpeg = pkgs.ffmpeg_5;
+          ffmpeg = pkgs.ffmpeg_7;
         };
 
         packages.nnedi_weights = nnedi_weights;
