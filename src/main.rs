@@ -160,11 +160,12 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
 
             if let Stream::Audio(audio) = stream {
-                if audio.channel_layout == ChannelLayout::STEREO {
+                let layout = ChannelLayout::from(&audio.channel_layout);
+                if layout == ChannelLayout::STEREO {
                     print!("(2.0) ");
-                } else if audio.channel_layout == ChannelLayout::_5POINT1 {
+                } else if layout == ChannelLayout::_5POINT1 {
                     print!("(5.1) ");
-                } else if audio.channel_layout == ChannelLayout::_7POINT1 {
+                } else if layout == ChannelLayout::_7POINT1 {
                     print!("(7.1) ");
                 }
             }

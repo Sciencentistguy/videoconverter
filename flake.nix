@@ -80,7 +80,7 @@
           };
       in {
         packages.videoconverter = pkgs.callPackage videoconverter {
-          ffmpeg = pkgs.ffmpeg_5.override {
+          ffmpeg = pkgs.ffmpeg_7.override {
             ffmpegVariant = "full";
             withFullDeps = true;
             withUnfree = true;

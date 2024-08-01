@@ -9,6 +9,7 @@ pub use ffmpeg::codec::Parameters;
 pub use ffmpeg::format::context::Input;
 pub use ffmpeg::media::Type;
 use ffmpeg::ChannelLayout;
+use ffmpeg_sys_the_third::AVChannelLayout;
 use tracing::*;
 
 #[derive(Debug, Clone, Copy)]
@@ -30,8 +31,8 @@ pub struct Audio {
     pub index: usize,
     pub codec: codec::Id,
     pub lang: Option<String>,
-    pub channels: u16,
-    pub channel_layout: ChannelLayout,
+    pub channels: u32,
+    pub channel_layout: AVChannelLayout,
     pub profile: Option<ffmpeg::codec::Profile>,
     pub title: Option<String>,
 }
@@ -82,7 +83,7 @@ impl Stream {
         }
     }
 
-    fn video(index: usize, codec_context: Context, codec_parameters: Parameters) -> Stream {
+    fn video(index: usize, codec_context: Context, codec_parameters: Parameters) -> Self {
         let index = index;
         let codec = codec_parameters.id();
 
@@ -118,8 +119,8 @@ impl Stream {
         let codec = codec_parameters.id();
         let lang = tags.get("language").map(|f| f.to_string());
         let decoder = codec_context.decoder().audio().unwrap();
-        let channels = decoder.channels();
-        let channel_layout = decoder.channel_layout();
+        let channel_layout = decoder.ch_layout().to_owned();
+        let channels = channel_layout.channels();
         let profile = match decoder.profile() {
             codec::Profile::Unknown => None,
             x => Some(x),
@@ -131,7 +132,7 @@ impl Stream {
             codec,
             lang,
             channels,
-            channel_layout,
+            channel_layout: channel_layout.into_owned(),
             profile,
             title,
         })
