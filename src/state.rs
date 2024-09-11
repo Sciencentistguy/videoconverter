@@ -1,27 +1,29 @@
 use crate::tv::TVOptions;
 use crate::ARGS;
 
-use std::{
-    fs::File,
-    io::{BufRead, Write},
-    path::Path,
-};
+use std::{fs::File, path::Path};
 
+use strum::Display;
+use thiserror::Error;
 use tracing::*;
 
-pub fn write_state(tv_options: &TVOptions) -> std::io::Result<()> {
-    let mut file = File::create(&ARGS.statefile)?;
-    write!(
-        &mut file,
-        "{}\n{}\n{}",
-        tv_options.title, tv_options.season, tv_options.episode,
-    )
+#[derive(Error, Debug, Display)]
+pub enum StateErr {
+    IO(#[from] std::io::Error),
+    Serde(#[from] serde_json::Error),
+}
+
+pub fn write_state(tv_options: &TVOptions) -> Result<(), StateErr> {
+    let file = File::create(&ARGS.statefile)?;
+    serde_json::to_writer(file, tv_options)?;
+    Ok(())
 }
 
 pub fn read_state() -> Option<TVOptions> {
     if !Path::new(&ARGS.statefile).exists() {
         return None;
     }
+
     let file = match File::open(&ARGS.statefile) {
         Ok(x) => x,
         Err(e) => {
@@ -30,45 +32,5 @@ pub fn read_state() -> Option<TVOptions> {
         }
     };
 
-    let reader = std::io::BufReader::new(file);
-    let mut lines = match reader
-        .lines()
-        .collect::<Result<Vec<String>, std::io::Error>>()
-    {
-        Ok(x) => x,
-        Err(e) => {
-            warn!(err = ?e, "Failed to read file");
-            return None;
-        }
-    };
-
-    if !validate_state(&lines) {
-        return None;
-    }
-
-    Some(TVOptions {
-        title: std::mem::take(&mut lines[0]),
-        season: lines[1].parse::<u32>().ok()?,
-        episode: lines[2].parse::<u32>().ok()?,
-    })
-}
-
-fn validate_state(statefile: &[String]) -> bool {
-    if statefile.len() != 3 {
-        return false;
-    }
-
-    if statefile.iter().any(|l| l.is_empty()) {
-        return false;
-    }
-
-    if statefile
-        .iter()
-        .skip(1)
-        .any(|l| l.chars().any(|x| !x.is_ascii_digit()))
-    {
-        return false;
-    }
-
-    true
+    serde_json::from_reader(file).ok()
 }

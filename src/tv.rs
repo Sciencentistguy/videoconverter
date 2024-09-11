@@ -1,9 +1,10 @@
 use question::Answer;
+use serde::{Deserialize, Serialize};
 use tracing::trace;
 
 use crate::{state, util, ARGS};
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct TVOptions {
     pub title: String,
     pub season: u32,
