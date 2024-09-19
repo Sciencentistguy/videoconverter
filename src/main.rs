@@ -1,6 +1,12 @@
 extern crate ffmpeg_the_third as ffmpeg;
 
-use std::{error::Error, iter, os::unix::prelude::OsStrExt, path::Path};
+use std::{
+    collections::HashMap,
+    error::Error,
+    iter,
+    os::unix::prelude::OsStrExt,
+    path::{Path, PathBuf},
+};
 
 mod command;
 mod directory;
@@ -24,9 +30,10 @@ use crate::{command::CommandError, directory::OutputDir, input::Stream};
 
 static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);
 
-const EXEMPT_FILE_EXTENSIONS: [&str; 11] = [
-    "clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt",
+const EXEMPT_FILE_EXTENSIONS: [&str; 12] = [
+    "clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt", "srt",
 ];
+const SUBTITLE_EXTS: [&str; 3] = ["ass", "srt", "srr"];
 
 fn main() -> Result<(), Box<dyn Error>> {
     ffmpeg::init()?;
@@ -108,6 +115,27 @@ fn main() -> Result<(), Box<dyn Error>> {
     };
     debug!(?entries);
 
+    let mut associated_subtitles: HashMap<&Path, Vec<PathBuf>> = HashMap::new();
+
+    for path in &entries {
+        let videofile_name = path.file_stem().unwrap().to_string_lossy();
+        let dir = path.parent().ok_or("Shouldn't be /")?;
+        for child in std::fs::read_dir(dir)? {
+            let child = child?.path();
+            if child.is_dir() {
+                continue;
+            }
+            let name = child.file_stem().unwrap().to_string_lossy();
+            if name.starts_with(&*videofile_name) {
+                if let Some(ext) = child.extension().map(|x| x.to_string_lossy()) {
+                    if SUBTITLE_EXTS.contains(&&*ext.to_lowercase()) {
+                        associated_subtitles.entry(path).or_default().push(child);
+                    }
+                }
+            }
+        }
+    }
+
     let mut commands = Vec::with_capacity(entries.len());
 
     let output_dir = OutputDir::new(
@@ -120,6 +148,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut errored_paths = Vec::new();
 
     for input_filepath in &entries {
+        let associated_subs = {
+            if let Some(v) = associated_subtitles.get(input_filepath.as_path()) {
+                v.as_slice()
+            } else {
+                &[]
+            }
+        };
+
         let output_filename = command::generate_output_filename(input_filepath, &tv_options);
         let output_path = output_dir.0.join(output_filename);
 
@@ -129,18 +165,31 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let file = ffmpeg::format::input(&input_filepath)?;
 
-        let parsed = input::parse_stream_metadata(file);
+        let mut parsed = input::parse_stream_metadata(file, 0);
+
+        for (i, path) in associated_subs.iter().enumerate() {
+            let file = ffmpeg::format::input(path)?;
+            parsed.extend_from_slice(&input::parse_stream_metadata(file, i + 1));
+        }
+
         let stream_mappings = input::get_stream_mappings(&parsed);
         let codec_mappings = input::get_codec_mapping(&stream_mappings);
 
         let mappings = &stream_mappings;
         let codecs = &codec_mappings;
+
+        if mappings.video.is_empty() {
+            error!("No video streams found");
+            std::process::exit(1);
+        }
+
         println!(
             "Input file '{}' -> '{}':",
             input_filepath.display(),
             output_path.display(),
         );
         for stream in mappings.iter() {
+            let file = stream.file();
             let index = stream.index();
             let codec = codecs.get(&index).unwrap();
             let oldcodec = stream.codec();
@@ -149,7 +198,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Some(x) => x,
             };
 
-            print!("Mapping stream {index}: {oldcodec:?} ");
+            print!("Mapping stream {file}:{index}: {oldcodec:?} ");
 
             if let Some(title) = stream
                 .as_audio()
@@ -204,6 +253,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let command = command::generate_ffmpeg_command(
             input_filepath,
+            associated_subs,
             &output_path,
             stream_mappings,
             codec_mappings,

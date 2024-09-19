@@ -21,6 +21,7 @@ pub enum FieldOrder {
 
 #[derive(Debug, Clone)]
 pub struct Video {
+    pub file: usize,
     pub index: usize,
     pub codec: codec::Id,
     pub field_order: FieldOrder,
@@ -28,6 +29,7 @@ pub struct Video {
 
 #[derive(Debug, Clone)]
 pub struct Audio {
+    pub file: usize,
     pub index: usize,
     pub codec: codec::Id,
     pub lang: Option<String>,
@@ -39,6 +41,7 @@ pub struct Audio {
 
 #[derive(Debug, Clone)]
 pub struct Subtitle {
+    pub file: usize,
     pub index: usize,
     pub codec: codec::Id,
     pub lang: Option<String>,
@@ -59,6 +62,14 @@ pub struct StreamMappings {
 }
 
 impl Stream {
+    pub fn file(&self) -> usize {
+        match self {
+            Stream::Video(x) => x.file,
+            Stream::Audio(x) => x.file,
+            Stream::Subtitle(x) => x.file,
+        }
+    }
+
     pub fn index(&self) -> usize {
         match self {
             Stream::Video(x) => x.index,
@@ -83,7 +94,12 @@ impl Stream {
         }
     }
 
-    fn video(index: usize, codec_context: Context, codec_parameters: Parameters) -> Self {
+    fn video(
+        file: usize,
+        index: usize,
+        codec_context: Context,
+        codec_parameters: Parameters,
+    ) -> Self {
         let index = index;
         let codec = codec_parameters.id();
 
@@ -104,6 +120,7 @@ impl Stream {
         };
 
         Self::Video(Video {
+            file,
             index,
             codec,
             field_order,
@@ -111,6 +128,7 @@ impl Stream {
     }
 
     fn audio(
+        file: usize,
         index: usize,
         codec_context: Context,
         codec_parameters: Parameters,
@@ -128,6 +146,7 @@ impl Stream {
         let title = tags.get("title").map(|x| x.to_string());
 
         Self::Audio(Audio {
+            file,
             index,
             codec,
             lang,
@@ -138,12 +157,18 @@ impl Stream {
         })
     }
 
-    fn subtitle(index: usize, codec_parameters: Parameters, tags: ffmpeg::DictionaryRef) -> Stream {
+    fn subtitle(
+        file: usize,
+        index: usize,
+        codec_parameters: Parameters,
+        tags: ffmpeg::DictionaryRef,
+    ) -> Stream {
         let codec = codec_parameters.id();
         let lang = tags.get("language").map(|f| f.to_string());
         let title = tags.get("title").map(|x| x.to_string());
 
         Self::Subtitle(Subtitle {
+            file,
             index,
             codec,
             lang,
@@ -169,7 +194,7 @@ impl StreamMappings {
     }
 }
 
-pub fn parse_stream_metadata(file: Input) -> Vec<Stream> {
+pub fn parse_stream_metadata(file: Input, fileno: usize) -> Vec<Stream> {
     file.streams()
         .filter_map(|stream| {
             let index = stream.index();
@@ -180,9 +205,20 @@ pub fn parse_stream_metadata(file: Input) -> Vec<Stream> {
             let tags = stream.metadata();
 
             match codec_context.medium() {
-                Type::Video => Some(Stream::video(index, codec_context, codec_parameters)),
-                Type::Audio => Some(Stream::audio(index, codec_context, codec_parameters, tags)),
-                Type::Subtitle => Some(Stream::subtitle(index, codec_parameters, tags)),
+                Type::Video => Some(Stream::video(
+                    fileno,
+                    index,
+                    codec_context,
+                    codec_parameters,
+                )),
+                Type::Audio => Some(Stream::audio(
+                    fileno,
+                    index,
+                    codec_context,
+                    codec_parameters,
+                    tags,
+                )),
+                Type::Subtitle => Some(Stream::subtitle(fileno, index, codec_parameters, tags)),
                 _ => None,
             }
         })
@@ -217,11 +253,7 @@ pub fn get_stream_mappings(parsed: &[Stream]) -> StreamMappings {
     }
 
     match videos.len() {
-        0 => {
-            error!("No video streams found");
-            std::process::exit(1);
-        }
-        1 => {}
+        0..=1 => {}
         n => {
             warn!(%n, "File has multiple video streams. Only the first stream will be kept");
             videos.truncate(1);

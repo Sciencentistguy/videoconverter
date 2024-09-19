@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::iter::Iterator;
 use std::path::Path;
+use std::path::PathBuf;
 
 use crate::input::FieldOrder;
 use crate::input::Stream;
@@ -71,6 +72,7 @@ impl GetEncoderExt for codec::Id {
 
 pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     input_path: P,
+    associated_subs: &[PathBuf],
     output_path: P,
     mut mappings: StreamMappings,
     target_codecs: HashMap<usize, Option<codec::Id>>,
@@ -163,6 +165,11 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
 
     command.arg("-i");
     command.arg(input_path.as_ref().as_os_str());
+
+    for path in associated_subs {
+        command.arg("-i");
+        command.arg(path.as_os_str());
+    }
 
     // With large files this is needed to avoid an ffmpeg crash
     command.args(["-max_muxing_queue_size", "16384"]);
@@ -346,15 +353,16 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     // Map each stream from the input file
     for stream in mappings.iter() {
         command.arg("-map");
-        command.arg(format!("0:{}", stream.index()));
+        command.arg(format!("{}:{}", stream.file(), stream.index()));
     }
 
-    if ARGS.all_streams {
-        // Retain attachments and data
-        command.args(["-map", "0:d:?"]);
-        command.args(["-map", "0:t:?"]);
+    for i in 0..associated_subs.len() + 1 {
+        if ARGS.all_streams {
+            // Retain attachments and data
+            command.args(["-map", &format!("{}:d:?", i)]);
+            command.args(["-map", &format!("{}:t:?", i)]);
+        }
     }
-
     command.arg(output_path.as_ref().as_os_str());
 
     Ok(command)
