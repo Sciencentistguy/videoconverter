@@ -156,6 +156,14 @@ pub struct Args {
     /// Continue processing items on error.
     #[clap(long = "continue")]
     pub continue_processing: bool,
+
+    /// If passed, this will override the logic of which audio streams to keep
+    #[clap(long)]
+    pub override_audio: Vec<StreamRef>,
+
+    /// If passed, this will override the logic of which subtitle streams to keep
+    #[clap(long)]
+    pub override_subs: Vec<StreamRef>,
 }
 
 impl Args {
@@ -243,4 +251,30 @@ pub enum Libx264Tune {
     Ssim,
     FastDecode,
     ZeroLatency,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct StreamRef {
+    file: usize,
+    stream: usize,
+}
+
+impl StreamRef {
+    pub fn new(file: usize, stream: usize) -> Self {
+        Self { file, stream }
+    }
+}
+
+impl FromStr for StreamRef {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (before, after) = s
+            .split_once(':')
+            .ok_or("StreamRef must be of the form <file>:<stream>")?;
+        Ok(StreamRef {
+            file: before.parse().map_err(|_| "Parse failed for file number")?,
+            stream: after.parse().map_err(|_| "Parse failed for stream index")?,
+        })
+    }
 }

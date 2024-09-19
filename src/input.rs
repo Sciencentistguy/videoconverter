@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::interface::StreamRef;
 use crate::interface::VideoEncoder;
 use crate::ARGS;
 
@@ -239,13 +240,27 @@ pub fn get_stream_mappings(parsed: &[Stream]) -> StreamMappings {
             }
 
             Stream::Audio(x) => {
-                if x.lang.as_deref() == Some(&ARGS.audio_language) || ARGS.all_streams {
+                if !ARGS.override_audio.is_empty() {
+                    if ARGS
+                        .override_audio
+                        .contains(&StreamRef::new(x.file, x.index))
+                    {
+                        audios.push(Stream::Audio(x.clone()));
+                    }
+                } else if x.lang.as_deref() == Some(&ARGS.audio_language) || ARGS.all_streams {
                     audios.push(Stream::Audio(x.clone()));
                 }
             }
 
             Stream::Subtitle(x) => {
-                if x.lang.as_deref() == Some(&ARGS.subtitle_language) || ARGS.all_streams {
+                if !ARGS.override_subs.is_empty() {
+                    if ARGS
+                        .override_subs
+                        .contains(&StreamRef::new(x.file, x.index))
+                    {
+                        subtitles.push(Stream::Subtitle(x.clone()));
+                    }
+                } else if x.lang.as_deref() == Some(&ARGS.subtitle_language) || ARGS.all_streams {
                     subtitles.push(Stream::Subtitle(x.clone()));
                 }
             }
