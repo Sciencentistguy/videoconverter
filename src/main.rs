@@ -96,12 +96,23 @@ fn main() -> Result<(), Box<dyn Error>> {
                         // Remove files of the form `*.r00`, `*.r01`, etc
                         let is_rar_segment = matches!(file_extension.strip_prefix('r'), Some(s) if s.chars().all(|c| c.is_ascii_digit()));
 
-                        !(ARGS
+                        if ARGS
                             .ignored_extensions
                             .iter()
                             .any(|ignored| file_extension.ends_with(ignored))
-                            || EXEMPT_FILE_EXTENSIONS.contains(&file_extension)
-                            || is_rar_segment)
+                        {
+                            return false;
+                        }
+
+                        if  EXEMPT_FILE_EXTENSIONS.contains(&file_extension) {
+                            return false;
+                        }
+
+                        if is_rar_segment {
+                            return false;
+                        }
+
+                        true
                     });
 
                 entries.extend(it);
