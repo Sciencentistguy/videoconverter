@@ -2,7 +2,6 @@ extern crate ffmpeg_the_third as ffmpeg;
 
 use std::{
     collections::HashMap,
-    error::Error,
     iter,
     os::unix::prelude::OsStrExt,
     path::{Path, PathBuf},
@@ -17,6 +16,7 @@ mod tv;
 mod util;
 
 use clap::Parser;
+use color_eyre::eyre::{eyre, Result};
 use ffmpeg::ChannelLayout;
 use once_cell::sync::Lazy;
 use question::Answer;
@@ -35,7 +35,8 @@ const EXEMPT_FILE_EXTENSIONS: [&str; 12] = [
 ];
 const SUBTITLE_EXTS: [&str; 3] = ["ass", "srt", "srr"];
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<()> {
+    color_eyre::install()?;
     ffmpeg::init()?;
 
     tracing_subscriber::fmt()
@@ -130,7 +131,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     for path in &entries {
         let videofile_name = path.file_stem().unwrap().to_string_lossy();
-        let dir = path.parent().ok_or("Shouldn't be /")?;
+        let dir = path.parent().ok_or_else(|| eyre!("Shouldn't be /"))?;
         for child in std::fs::read_dir(dir)? {
             let child = child?.path();
             if child.is_dir() {
@@ -322,7 +323,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn run_commands(commands: Vec<Command>) -> Result<(), Box<dyn Error>> {
+async fn run_commands(commands: Vec<Command>) -> Result<()> {
     if !ARGS.parallel {
         for (i, mut command) in commands.into_iter().enumerate() {
             let mut handle = command.spawn()?;
