@@ -163,6 +163,11 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         }
     }
 
+    if !ARGS.input_fflags.is_empty() {
+        command.arg("-fflags");
+        command.arg(ARGS.input_fflags.join(""));
+    }
+
     command.arg("-i");
     command.arg(input_path.as_ref().as_os_str());
 

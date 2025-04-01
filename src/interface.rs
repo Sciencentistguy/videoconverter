@@ -164,6 +164,9 @@ pub struct Args {
     /// If passed, this will override the logic of which subtitle streams to keep
     #[clap(long)]
     pub override_subs: Vec<StreamRef>,
+
+    #[clap(long = "fflags")]
+    pub input_fflags: Vec<String>,
 }
 
 impl Args {
