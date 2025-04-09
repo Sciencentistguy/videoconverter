@@ -15,12 +15,13 @@ mod state;
 mod tv;
 mod util;
 
+use bounded_join_set::JoinSet;
 use clap::Parser;
 use color_eyre::eyre::{eyre, Result};
 use ffmpeg::ChannelLayout;
 use once_cell::sync::Lazy;
 use question::Answer;
-use tokio::{process::Command, runtime::Runtime, task::JoinSet};
+use tokio::{process::Command, runtime::Runtime};
 use tracing::*;
 use tracing_subscriber::EnvFilter;
 use tv::TVOptions;
@@ -324,7 +325,7 @@ fn main() -> Result<()> {
 }
 
 async fn run_commands(commands: Vec<Command>) -> Result<()> {
-    if !ARGS.parallel {
+    if ARGS.parallel.is_none() {
         for (i, mut command) in commands.into_iter().enumerate() {
             let mut handle = command.spawn()?;
             let status = handle.wait().await?;
@@ -338,7 +339,13 @@ async fn run_commands(commands: Vec<Command>) -> Result<()> {
         return Ok(());
     }
 
-    let mut js = JoinSet::new();
+    let count = match ARGS.parallel {
+        None => unreachable!(),
+        Some(None) => num_cpus::get(),
+        Some(Some(x)) => x,
+    };
+
+    let mut js = JoinSet::new(count);
 
     for mut command in commands {
         let handle = command.spawn()?;

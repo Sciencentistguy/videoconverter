@@ -111,8 +111,8 @@ pub struct Args {
     pub statefile: PathBuf,
 
     /// Spawn each ffmpeg command concurrently.
-    #[clap(short, long)]
-    pub parallel: bool,
+    #[clap(short, long, value_name="CONCURRENCY_LIMIT")]
+    pub parallel: Option<Option<usize>>,
 
     /// Moves the `default_audio_stream`th audio stream with the given language code to the front, and marks it as
     /// default.
