@@ -362,8 +362,8 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     }
 
     for i in 0..associated_subs.len() + 1 {
-        if ARGS.all_streams {
-            // Retain attachments and data
+        // Retain attachments and data, unless disabled
+        if !ARGS.discard_attachments {
             command.args(["-map", &format!("{}:d:?", i)]);
             command.args(["-map", &format!("{}:t:?", i)]);
         }

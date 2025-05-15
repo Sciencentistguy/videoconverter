@@ -167,6 +167,11 @@ pub struct Args {
 
     #[clap(long = "fflags")]
     pub input_fflags: Vec<String>,
+
+    /// By default, videoconverter retains all attachment and data streams. This disables that
+    /// behaviour
+    #[clap(long, conflicts_with = "all_streams")]
+    pub discard_attachments: bool
 }
 
 impl Args {
