@@ -35,7 +35,7 @@ static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);
 const EXEMPT_FILE_EXTENSIONS: [&str; 12] = [
     "clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt", "srt",
 ];
-const SUBTITLE_EXTS: [&str; 3] = ["ass", "srt", "srr"];
+const SUBTITLE_EXTS: [&str; 2] = ["ass", "srt"];
 
 fn main() -> Result<()> {
     color_eyre::install()?;
