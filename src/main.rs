@@ -18,7 +18,7 @@ mod util;
 
 use bounded_join_set::JoinSet;
 use clap::Parser;
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::{eyre, Context, Result};
 use ffmpeg::ChannelLayout;
 use once_cell::sync::Lazy;
 use question::Answer;
@@ -82,7 +82,13 @@ fn main() -> Result<()> {
                     eprintln!("ERROR: File {} not found", path.display());
                     continue;
                 }
-                Err(e) => return Err(eyre!("Failed to canonicalize path '{}': {}", path.display(), e)),
+                Err(e) => {
+                    return Err(eyre!(
+                        "Failed to canonicalize path '{}': {}",
+                        path.display(),
+                        e
+                    ))
+                }
             };
 
             if path.is_file() {
@@ -150,6 +156,7 @@ fn main() -> Result<()> {
             if name.starts_with(&*videofile_name) {
                 if let Some(ext) = child.extension().map(|x| x.to_string_lossy()) {
                     if SUBTITLE_EXTS.contains(&&*ext.to_lowercase()) {
+                        debug!(video_path=?path, subtitle_path=?child, "Found associated subtitle");
                         associated_subtitles.entry(path).or_default().push(child);
                     }
                 }
@@ -184,12 +191,14 @@ fn main() -> Result<()> {
             tv_options.episode += 1;
         }
 
-        let file = ffmpeg::format::input(&input_filepath)?;
+        let file = ffmpeg::format::input(&input_filepath)
+            .wrap_err_with(|| format!("Filepath: {}", input_filepath.display()))?;
 
         let mut parsed = input::parse_stream_metadata(file, 0);
 
         for (i, path) in associated_subs.iter().enumerate() {
-            let file = ffmpeg::format::input(path)?;
+            let file = ffmpeg::format::input(path)
+                .wrap_err_with(|| format!("Filepath: {}", path.display()))?;
             parsed.extend_from_slice(&input::parse_stream_metadata(file, i + 1));
         }
 

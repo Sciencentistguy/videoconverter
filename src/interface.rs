@@ -111,7 +111,7 @@ pub struct Args {
     pub statefile: PathBuf,
 
     /// Spawn each ffmpeg command concurrently.
-    #[clap(short, long, value_name="CONCURRENCY_LIMIT")]
+    #[clap(short, long, value_name = "CONCURRENCY_LIMIT")]
     pub parallel: Option<Option<usize>>,
 
     /// Moves the `default_audio_stream`th audio stream with the given language code to the front, and marks it as
@@ -171,7 +171,7 @@ pub struct Args {
     /// By default, videoconverter retains all attachment and data streams. This disables that
     /// behaviour
     #[clap(long, conflicts_with = "all_streams")]
-    pub discard_attachments: bool
+    pub discard_attachments: bool,
 }
 
 impl Args {
