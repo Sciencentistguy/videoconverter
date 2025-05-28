@@ -2,6 +2,7 @@ extern crate ffmpeg_the_third as ffmpeg;
 
 use std::{
     collections::HashMap,
+    io::ErrorKind,
     iter,
     os::unix::prelude::OsStrExt,
     path::{Path, PathBuf},
@@ -74,8 +75,15 @@ fn main() -> Result<()> {
         //  - If it's a file, add it unconditionally - the user knows what they're doing
         //  - If it's a directory, walk it and add all files in it, if they are compatible
         // `path` should never be a symlink, as we canonicalize it.
-        for path in ARGS.path.iter().map(|x| x.canonicalize()) {
-            let path = path?;
+        for path in ARGS.path.iter() {
+            let path = match path.canonicalize() {
+                Ok(path) => path,
+                Err(e) if e.kind() == ErrorKind::NotFound => {
+                    eprintln!("ERROR: File {} not found", path.display());
+                    continue;
+                }
+                Err(e) => return Err(eyre!("Failed to canonicalize path '{}': {}", path.display(), e)),
+            };
 
             if path.is_file() {
                 entries.push(path);
