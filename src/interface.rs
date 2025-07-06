@@ -42,13 +42,13 @@ pub struct Args {
     #[clap(long)]
     pub reencode_audio: bool,
 
-    /// Audio language to keep, usually in the form of an ISO 639-2 code
-    #[clap(long, default_value("eng"), conflicts_with("all_streams"))]
-    pub audio_language: String,
+    /// Audio languages to keep, in the form of ISO 639-2 codes
+    #[clap(long("audio-lang"), default_value("eng"), conflicts_with("all_streams"))]
+    pub audio_languages: Vec<String>,
 
-    /// Subtutle language to keep, usually in the form of an ISO 639-2 code
-    #[clap(long, default_value("eng"), conflicts_with("all_streams"))]
-    pub subtitle_language: String,
+    /// Subtitle languages to keep, in the form of ISO 639-2 codes
+    #[clap(long("subtitle-lang"), default_value("eng"), conflicts_with("all_streams"))]
+    pub subtitle_languages: Vec<String>,
 
     /// Enable reencoding of subtitles
     #[clap(long)]

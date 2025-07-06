@@ -93,7 +93,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         }
     }
 
-    let video_stream = match mappings.video.get(0) {
+    let video_stream = match mappings.video.first() {
         Some(Stream::Video(x)) => x,
         _ => {
             error!("Input file does not contain a video stream.");

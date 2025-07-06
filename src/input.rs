@@ -1,15 +1,14 @@
 use std::collections::HashMap;
 
+use crate::ARGS;
 use crate::interface::StreamRef;
 use crate::interface::VideoEncoder;
-use crate::ARGS;
 
 pub use ffmpeg::codec;
 pub use ffmpeg::codec::Context;
 pub use ffmpeg::codec::Parameters;
 pub use ffmpeg::format::context::Input;
 pub use ffmpeg::media::Type;
-use ffmpeg::ChannelLayout;
 use ffmpeg_sys_the_third::AVChannelLayout;
 use tracing::*;
 
@@ -28,6 +27,7 @@ pub struct Video {
     pub field_order: FieldOrder,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct Audio {
     pub file: usize,
@@ -101,7 +101,6 @@ impl Stream {
         codec_context: Context,
         codec_parameters: Parameters,
     ) -> Self {
-        let index = index;
         let codec = codec_parameters.id();
 
         let decoder = codec_context.decoder().video();
@@ -247,7 +246,11 @@ pub fn get_stream_mappings(parsed: &[Stream]) -> StreamMappings {
                     {
                         audios.push(Stream::Audio(x.clone()));
                     }
-                } else if x.lang.as_deref() == Some(&ARGS.audio_language) || ARGS.all_streams {
+                } else if ARGS.all_streams {
+                    audios.push(Stream::Audio(x.clone()));
+                } else if let Some(lang) = x.lang.as_deref()
+                    && ARGS.audio_languages.iter().any(|x| x == lang)
+                {
                     audios.push(Stream::Audio(x.clone()));
                 }
             }
@@ -260,7 +263,11 @@ pub fn get_stream_mappings(parsed: &[Stream]) -> StreamMappings {
                     {
                         subtitles.push(Stream::Subtitle(x.clone()));
                     }
-                } else if x.lang.as_deref() == Some(&ARGS.subtitle_language) || ARGS.all_streams {
+                } else if ARGS.all_streams {
+                    subtitles.push(Stream::Subtitle(x.clone()));
+                } else if let Some(lang) = x.lang.as_deref()
+                    && ARGS.subtitle_languages.iter().any(|x| x == lang)
+                {
                     subtitles.push(Stream::Subtitle(x.clone()));
                 }
             }
