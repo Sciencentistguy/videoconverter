@@ -6,27 +6,27 @@
       url = "github:edolstra/flake-compat";
       flake = false;
     };
+    fenix.url = "github:nix-community/fenix";
   };
-  outputs = {
-    self,
-    nixpkgs,
-    flake-utils,
-    ...
-  }:
+  outputs = { self, nixpkgs, flake-utils, fenix, ... }:
     {
       overlay = final: prev: {
         videoconverter = self.packages.${prev.system}.default;
       };
     }
     // flake-utils.lib.eachDefaultSystem (system:
-      # Instantiating a nixpkgs here as it needs to have `config.allowUnfree = true;`.
-      # Using https://github.com/numtide/nixpkgs-unfree caused opencv to build from source.
       let
-        pkgs = import "${nixpkgs}" {
+        pkgs = import nixpkgs {
           config.allowUnfree = true;
           inherit system;
         };
-        inherit (pkgs) lib rustPlatform;
+        inherit (pkgs) lib;
+        fenixStable = fenix.packages.${system}.stable;
+        rustToolchain = fenixStable.toolchain;
+        rustPlatform = pkgs.makeRustPlatform {
+          cargo = rustToolchain.cargo;
+          rustc = rustToolchain.rustc;
+        };
 
         nnedi_weights = pkgs.fetchurl {
           url = "https://github.com/dubhater/vapoursynth-nnedi3/raw/cc6f6065e09c9241553cb51f10002a7314d66bfa/src/nnedi3_weights.bin";
@@ -45,7 +45,6 @@
 
             cargoLock.lockFile = ./Cargo.lock;
 
-            # Point to a nixpkgs ffmpeg rather than using the one on $PATH
             prePatch = ''
               substituteInPlace src/command.rs \
                 --replace 'const FFMPEG_BIN_PATH: &str = "ffmpeg";'\
@@ -86,7 +85,6 @@
             withUnfree = true;
           };
         };
-        # Assume that ffmpeg works and I don't need to build it in CI
         packages.videoconverter-ci = pkgs.callPackage videoconverter {
           ffmpeg = pkgs.ffmpeg_7;
         };
@@ -95,15 +93,17 @@
 
         packages.default = self.packages.${system}.videoconverter;
 
-        devShells.default = self.packages.${system}.default.overrideAttrs (super: {
-          nativeBuildInputs = with pkgs;
-            super.nativeBuildInputs
-            ++ [
-              clippy
-              rustfmt
-              cargo-edit
-            ];
-          RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
-        });
+        devShells.default = pkgs.mkShell {
+          buildInputs = [
+            rustToolchain
+            fenixStable.rustfmt
+            fenixStable.clippy
+            pkgs.cargo-edit
+            pkgs.pkg-config
+            pkgs.ffmpeg_7
+            pkgs.libiconv
+          ];
+          RUST_SRC_PATH = "${fenixStable.rust-src}/lib/rustlib/src/rust/library";
+        };
       });
 }
