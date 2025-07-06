@@ -24,8 +24,8 @@
         fenixStable = fenix.packages.${system}.stable;
         rustToolchain = fenixStable.toolchain;
         rustPlatform = pkgs.makeRustPlatform {
-          cargo = rustToolchain.cargo;
-          rustc = rustToolchain.rustc;
+          cargo = rustToolchain;
+          rustc = rustToolchain;
         };
 
         nnedi_weights = pkgs.fetchurl {
@@ -84,9 +84,11 @@
             withFullDeps = true;
             withUnfree = true;
           };
+          inherit rustPlatform;
         };
         packages.videoconverter-ci = pkgs.callPackage videoconverter {
           ffmpeg = pkgs.ffmpeg_7;
+          inherit rustPlatform;
         };
 
         packages.nnedi_weights = nnedi_weights;
