@@ -9,7 +9,7 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.4.18", features = ["derive"] }
 itertools = "0.14.0"
-ffmpeg-the-third = "2.0.1"
+ffmpeg-the-third = "3.0.0"
 ffmpeg-sys-the-third = "2.0.0"
 once_cell = "1.19.0"
 tracing = "0.1.40"
