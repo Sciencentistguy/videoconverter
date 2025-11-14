@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use crate::ARGS;
+use crate::interface::AudioReencodeType;
 use crate::interface::StreamRef;
 use crate::interface::VideoEncoder;
+use crate::ARGS;
 
 pub use ffmpeg::codec;
 pub use ffmpeg::codec::Context;
@@ -328,8 +329,19 @@ fn is_pcm(x: codec::Id) -> bool {
     )
 }
 
+fn is_lossless(x: &Audio) -> bool {
+    use codec::Id::*;
+    is_pcm(x.codec)
+        || matches!(x.codec,
+        TRUEHD |
+        DTS if matches!(
+            x.profile,
+            Some(codec::Profile::DTS(codec::profile::DTS::HD_MA))
+        ))
+}
+
 pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Option<codec::Id>> {
-    use codec::Id::{AAC, DTS, DVD_SUBTITLE, FLAC, H264, HDMV_PGS_SUBTITLE, HEVC, SSA, TRUEHD};
+    use codec::Id::{AAC, DVD_SUBTITLE, FLAC, H264, HDMV_PGS_SUBTITLE, HEVC, SSA};
 
     stream_mappings
         .iter()
@@ -347,19 +359,17 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
                         }),
                     ),
                 },
-                Stream::Audio(audio) if ARGS.reencode_audio => match audio.codec {
-                    FLAC | AAC => (index, None),
-                    c if is_pcm(c) => (index, Some(FLAC)),
-                    TRUEHD => (index, Some(FLAC)),
-                    DTS if matches!(
-                        audio.profile,
-                        Some(codec::Profile::DTS(codec::profile::DTS::HD_MA))
-                    ) =>
-                    {
-                        (index, Some(FLAC))
-                    }
-                    _ => (index, Some(AAC)),
-                },
+                Stream::Audio(audio) => (
+                    index,
+                    match ARGS.audio_reencoding {
+                        AudioReencodeType::None => None,
+                        AudioReencodeType::PCM if is_pcm(audio.codec) => Some(FLAC),
+                        AudioReencodeType::PCM => None,
+                        _ if is_lossless(audio) => Some(FLAC),
+                        AudioReencodeType::All => Some(AAC),
+                        _ => None,
+                    },
+                ),
                 Stream::Subtitle(subtitle) if ARGS.reencode_subs => match subtitle.codec {
                     HDMV_PGS_SUBTITLE | DVD_SUBTITLE => (index, None),
                     _ => (index, Some(SSA)),

@@ -38,16 +38,24 @@ pub struct Args {
     #[clap(long, conflicts_with_all = &["force_reencode_video", "force_deinterlace"])]
     pub copy_video: bool,
 
-    /// Enable reencoding of audio
-    #[clap(long)]
-    pub reencode_audio: bool,
+    /// Control the reencoding of audio
+    #[clap(long, default_value = "pcm")]
+    pub audio_reencoding: AudioReencodeType,
 
     /// Audio languages to keep, in the form of ISO 639-2 codes
-    #[clap(long("audio-lang"), default_value("eng"), conflicts_with("all_streams"))]
+    #[clap(
+        long("audio-lang"),
+        default_value("eng"),
+        conflicts_with("all_streams")
+    )]
     pub audio_languages: Vec<String>,
 
     /// Subtitle languages to keep, in the form of ISO 639-2 codes
-    #[clap(long("subtitle-lang"), default_value("eng"), conflicts_with("all_streams"))]
+    #[clap(
+        long("subtitle-lang"),
+        default_value("eng"),
+        conflicts_with("all_streams")
+    )]
     pub subtitle_languages: Vec<String>,
 
     /// Enable reencoding of subtitles
@@ -285,4 +293,17 @@ impl FromStr for StreamRef {
             stream: after.parse().map_err(|_| "Parse failed for stream index")?,
         })
     }
+}
+
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum AudioReencodeType {
+    /// Stream-copy all audio codecs
+    None,
+    /// Reencode PCM audio to FLAC, stream-copy all other codecs
+    PCM,
+    /// Reencode lossless audio to flac, stream-copy all other codecs
+    Lossless,
+    /// Reencode lossless audio to FLAC and lossy audio to AAC [Not Reccomended]
+    All,
 }
