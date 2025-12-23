@@ -18,7 +18,7 @@ mod util;
 
 use bounded_join_set::JoinSet;
 use clap::Parser;
-use color_eyre::eyre::{eyre, Context, Result};
+use color_eyre::eyre::{Context, Result, eyre};
 use ffmpeg::ChannelLayout;
 use once_cell::sync::Lazy;
 use question::Answer;
@@ -28,7 +28,7 @@ use tracing_subscriber::EnvFilter;
 use tv::TVOptions;
 use walkdir::WalkDir;
 
-use crate::{command::CommandError, directory::OutputDir, input::Stream};
+use crate::{command::CommandError, directory::OutputDir, input::Stream, state::Db};
 
 static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);
 
@@ -55,19 +55,6 @@ fn main() -> Result<()> {
         ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL);
     }
 
-    let mut tv_options = TVOptions::from_cli();
-
-    if let Some(ref tv_options) = tv_options {
-        if let Err(e) = state::write_state(tv_options) {
-            warn!(
-                error = %e,
-                "Failed to write statefile /tmp/videoconverter.state"
-            );
-        }
-    }
-
-    debug!(?tv_options);
-
     let entries = {
         let mut entries = Vec::new();
 
@@ -87,7 +74,7 @@ fn main() -> Result<()> {
                         "Failed to canonicalize path '{}': {}",
                         path.display(),
                         e
-                    ))
+                    ));
                 }
             };
 
@@ -140,6 +127,21 @@ fn main() -> Result<()> {
         entries.sort_unstable_by(|a, b| a.file_name().cmp(&b.file_name()));
         entries
     };
+
+    let title = entries
+        .first()
+        .and_then(|x| x.file_name().map(|y| y.to_string_lossy()));
+
+    let db = Db::new().unwrap();
+
+    let mut tv_options = TVOptions::from_cli(&db, title.as_deref());
+
+    if let Some(ref tv_options) = tv_options {
+        db.write(tv_options);
+    }
+
+    debug!(?tv_options);
+
     debug!(?entries);
 
     let mut associated_subtitles: HashMap<&Path, Vec<PathBuf>> = HashMap::new();
@@ -153,13 +155,12 @@ fn main() -> Result<()> {
                 continue;
             }
             let name = child.file_stem().unwrap().to_string_lossy();
-            if name.starts_with(&*videofile_name) {
-                if let Some(ext) = child.extension().map(|x| x.to_string_lossy()) {
-                    if SUBTITLE_EXTS.contains(&&*ext.to_lowercase()) {
-                        debug!(video_path=?path, subtitle_path=?child, "Found associated subtitle");
-                        associated_subtitles.entry(path).or_default().push(child);
-                    }
-                }
+            if name.starts_with(&*videofile_name)
+                && let Some(ext) = child.extension().map(|x| x.to_string_lossy())
+                && SUBTITLE_EXTS.contains(&&*ext.to_lowercase())
+            {
+                debug!(video_path=?path, subtitle_path=?child, "Found associated subtitle");
+                associated_subtitles.entry(path).or_default().push(child);
             }
         }
     }

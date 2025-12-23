@@ -2,7 +2,7 @@ use question::Answer;
 use serde::{Deserialize, Serialize};
 use tracing::trace;
 
-use crate::{state, util, ARGS};
+use crate::{ARGS, state::Db, util};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct TVOptions {
@@ -12,7 +12,7 @@ pub struct TVOptions {
 }
 
 impl TVOptions {
-    pub fn from_cli() -> Option<Self> {
+    pub fn from_cli(db: &Db, title: Option<&str>) -> Option<Self> {
         if ARGS.tv_mode {
             trace!("TV Mode enabled via args");
             return Some(TVOptions {
@@ -26,40 +26,37 @@ impl TVOptions {
             return None;
         }
 
-        let previous_state = state::read_state();
-        let mut still_using_previous = false;
+        let mut using_db = false;
 
-        let (previous_title, previous_season, _) = previous_state.transpose();
+        let previous_state = title.and_then(|title| db.find(title));
+        let guessed_title = previous_state.as_ref().map(|state| state.title.clone());
 
         let title = {
-            let mut title = String::new();
-            if let Some(previous_title) = previous_title {
-                let is_blank = previous_title.is_empty();
-                let use_old_value = (!is_blank)
-                    && util::confirm(&format!("Use previous title? ({})", previous_title), None);
-
-                still_using_previous = use_old_value;
-                if use_old_value {
-                    title = previous_title;
-                }
-            }
-
-            if title.is_empty() {
-                title = loop {
+            if let Some(guessed_title) = guessed_title
+                && util::confirm(
+                    &format!("Use guessed title? ({guessed_title})"),
+                    Some(Answer::YES),
+                )
+            {
+                using_db = true;
+                guessed_title
+            } else {
+                loop {
                     let response = util::prompt("Please enter the title of the TV show:");
                     if !response.is_empty() {
                         break response;
                     }
                 }
             }
-            title
         };
+
+        let previous_season = previous_state.as_ref().map(|state| state.season);
 
         let season = {
             let mut season = None;
 
             if let Some(previous_season) = previous_season {
-                let use_old_value = still_using_previous
+                let use_old_value = using_db
                     && util::confirm(&format!("Use previous season? ({})", previous_season), None);
 
                 if use_old_value {
@@ -94,22 +91,5 @@ impl TVOptions {
             season,
             episode,
         })
-    }
-}
-
-trait TransposeTvOptions {
-    fn transpose(self) -> (Option<String>, Option<u32>, Option<u32>);
-}
-
-impl TransposeTvOptions for Option<TVOptions> {
-    fn transpose(self) -> (Option<String>, Option<u32>, Option<u32>) {
-        match self {
-            Some(TVOptions {
-                title,
-                season,
-                episode,
-            }) => (Some(title), Some(season), Some(episode)),
-            None => (None, None, None),
-        }
     }
 }

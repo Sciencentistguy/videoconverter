@@ -115,8 +115,8 @@ pub struct Args {
     pub title: Option<String>,
 
     /// The path for the statefile
-    #[clap(long, default_value = "/tmp/videoconverter.state")]
-    pub statefile: PathBuf,
+    #[clap(long = "statefile")]
+    pub db_path: Option<PathBuf>,
 
     /// Spawn each ffmpeg command concurrently.
     #[clap(short, long, value_name = "CONCURRENCY_LIMIT")]
