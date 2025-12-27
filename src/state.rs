@@ -16,8 +16,18 @@ impl Db {
         let path = if let Some(db_path) = &ARGS.db_path {
             db_path.clone()
         } else {
-            dirs::cache_dir().unwrap().join("videoconverter/videoconverter.sqlite")
+            dirs::cache_dir()
+                .unwrap()
+                .join("videoconverter/videoconverter.sqlite")
         };
+        if path.is_dir() {
+            return Err(format!("Database path {path:?} is a directory, expected a file").into());
+        }
+        if let Some(parent) = path.parent()
+            && !parent.exists()
+        {
+            std::fs::create_dir_all(parent)?;
+        }
         let connection = Connection::open(path)?;
 
         connection.execute_batch(
