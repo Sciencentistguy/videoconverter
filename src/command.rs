@@ -107,7 +107,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     // - `--force-reencode` is passed
     let reencoding_video = target_codecs[&video_stream.index].is_some()
         || ARGS.force_deinterlace
-        || ARGS.force_reencode_video;
+        || ARGS.reencode_video;
 
     let reencoding_audio = mappings
         .audio
@@ -186,7 +186,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             if let Some(&codec) = codec.as_ref() {
                 command.arg(codec.get_encoder());
             } else if mappings.video.iter().map(|x| x.index()).contains(&index_in)
-                && ARGS.force_reencode_video
+                && ARGS.reencode_video
             {
                 let encoder = match ARGS.encoder {
                     VideoEncoder::Libx264 => "libx264",

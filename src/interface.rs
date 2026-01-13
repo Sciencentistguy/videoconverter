@@ -31,11 +31,11 @@ pub struct Args {
     pub force_deinterlace: bool,
 
     /// Force reencoding of video
-    #[clap(long = "force-reencode")]
-    pub force_reencode_video: bool,
+    #[clap(long)]
+    pub reencode_video: bool,
 
     /// Disable reencoding of video
-    #[clap(long, conflicts_with_all = &["force_reencode_video", "force_deinterlace"])]
+    #[clap(long, conflicts_with_all = &["reencode_video", "force_deinterlace"])]
     pub copy_video: bool,
 
     /// Control the reencoding of audio

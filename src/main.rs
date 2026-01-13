@@ -5,7 +5,7 @@ use std::{
     io::ErrorKind,
     iter,
     os::unix::prelude::OsStrExt,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf}, sync::Arc,
 };
 
 mod command;
@@ -16,13 +16,12 @@ mod state;
 mod tv;
 mod util;
 
-use bounded_join_set::JoinSet;
 use clap::Parser;
 use color_eyre::eyre::{Context, Result, eyre};
 use ffmpeg::ChannelLayout;
 use once_cell::sync::Lazy;
 use question::Answer;
-use tokio::{process::Command, runtime::Runtime};
+use tokio::{process::Command, runtime::Runtime, sync::Semaphore, task::JoinSet};
 use tracing::*;
 use tracing_subscriber::EnvFilter;
 use tv::TVOptions;
@@ -363,13 +362,17 @@ async fn run_commands(commands: Vec<Command>) -> Result<()> {
         Some(Some(x)) => x,
     };
 
-    let mut js = JoinSet::new(count);
+    let sem = Arc::new(Semaphore::new(count));
+    let mut js = JoinSet::new();
 
     for mut command in commands {
         let handle = command.spawn()?;
+        let permit = sem.clone().acquire_owned().await?;
         js.spawn(async move {
             let mut handle = handle;
-            handle.wait().await
+            let ret = handle.wait().await;
+            drop(permit);
+            ret
         });
     }
 
