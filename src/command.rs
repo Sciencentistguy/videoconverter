@@ -2,13 +2,14 @@ use std::collections::HashMap;
 use std::iter::Iterator;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Stdio;
 
+use crate::ARGS;
 use crate::input::FieldOrder;
 use crate::input::Stream;
 use crate::input::StreamMappings;
 use crate::interface::VideoEncoder;
 use crate::tv::TVOptions;
-use crate::ARGS;
 
 use ffmpeg::codec;
 use itertools::Itertools;
@@ -163,10 +164,16 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         }
     }
 
-    if !ARGS.input_fflags.is_empty() {
-        command.arg("-fflags");
-        command.arg(ARGS.input_fflags.join(""));
-    }
+    command.arg("-fflags");
+    command.arg({
+        let mut flags = vec!["+genpts"];
+        if !ARGS.input_fflags.is_empty() {
+            for flag in &ARGS.input_fflags {
+                flags.push(flag);
+            }
+        }
+        flags.join("")
+    });
 
     command.arg("-i");
     command.arg(input_path.as_ref().as_os_str());

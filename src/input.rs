@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+use std::path::Path;
+use std::time::Duration;
 
+use crate::ARGS;
 use crate::interface::AudioReencodeType;
 use crate::interface::StreamRef;
 use crate::interface::VideoEncoder;
-use crate::ARGS;
 
 pub use ffmpeg::codec;
 pub use ffmpeg::codec::Context;
@@ -378,4 +380,14 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
             }
         })
         .collect()
+}
+
+pub fn length(input_filepath: impl AsRef<Path>) -> Duration {
+    let ictx = ffmpeg::format::input(&input_filepath).unwrap();
+    let duration = ictx.duration();
+    if duration > 0 {
+        Duration::from_micros(duration as u64)
+    } else {
+        Duration::ZERO
+    }
 }

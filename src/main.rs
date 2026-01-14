@@ -5,7 +5,9 @@ use std::{
     io::ErrorKind,
     iter,
     os::unix::prelude::OsStrExt,
-    path::{Path, PathBuf}, sync::Arc,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
 };
 
 mod command;
@@ -19,9 +21,15 @@ mod util;
 use clap::Parser;
 use color_eyre::eyre::{Context, Result, eyre};
 use ffmpeg::ChannelLayout;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use once_cell::sync::Lazy;
 use question::Answer;
-use tokio::{process::Command, runtime::Runtime, sync::Semaphore, task::JoinSet};
+use tokio::{
+    runtime::Runtime,
+    signal,
+    sync::{Semaphore, broadcast},
+    task::JoinSet,
+};
 use tracing::*;
 use tracing_subscriber::EnvFilter;
 use tv::TVOptions;
@@ -288,10 +296,15 @@ fn main() -> Result<()> {
             stream_mappings,
             codec_mappings,
         );
+        let length = input::length(input_filepath);
 
         info!(?command);
         match command {
-            Ok(command) => commands.push(command),
+            Ok(command) => commands.push(Command {
+                inner: command,
+                length,
+                filename: output_path,
+            }),
             Err(CommandError::FileExists) => {
                 if !ARGS.continue_processing {
                     std::process::exit(1);
@@ -304,7 +317,7 @@ fn main() -> Result<()> {
 
     if ARGS.print_commands {
         for command in &commands {
-            let command = command.as_std();
+            let command = command.inner.as_std();
             let cmd = iter::once(command.get_program())
                 .chain(command.get_args())
                 .map(|x| x.to_string_lossy())
@@ -342,46 +355,132 @@ fn main() -> Result<()> {
 }
 
 async fn run_commands(commands: Vec<Command>) -> Result<()> {
-    if ARGS.parallel.is_none() {
-        for (i, mut command) in commands.into_iter().enumerate() {
-            let mut handle = command.spawn()?;
-            let status = handle.wait().await?;
-            if !status.success() {
-                error!(
-                    "Command {i} failed with status code {}",
-                    status.code().unwrap()
-                );
-            }
-        }
-        return Ok(());
-    }
-
     let count = match ARGS.parallel {
-        None => unreachable!(),
+        None => 1,
         Some(None) => num_cpus::get(),
-        Some(Some(x)) => x,
+        Some(Some(x)) => {
+            // ensure we don't create more processes than cores
+            std::cmp::min(x, num_cpus::get())
+        }
     };
 
     let sem = Arc::new(Semaphore::new(count));
     let mut js = JoinSet::new();
 
-    for mut command in commands {
-        let handle = command.spawn()?;
-        let permit = sem.clone().acquire_owned().await?;
-        js.spawn(async move {
-            let mut handle = handle;
-            let ret = handle.wait().await;
-            drop(permit);
-            ret
-        });
-    }
+    let mpb = MultiProgress::new();
+    let (tx, _) = broadcast::channel(1);
 
-    while let Some(status) = js.join_next().await {
-        let status = status??;
-        if !status.success() {
-            error!("Command failed with status code {}", status.code().unwrap());
+    // While the commands are running, the ctrl-c handler is also running.
+    // If it receives a ctrl-c, it sends a message to all running tasks to cancel.
+    // Each command task polls both its own work, and the cancel message, and if it
+    // receives the cancel message, it kills its ffmpeg process and exits.
+    // This also results in any remaining commands never being started.
+    tokio::select! {
+        _ = signal::ctrl_c() => {
+             eprintln!("\nCtrl-C received, stopping...");
+             let _ = tx.send(());
+             while js.join_next().await.is_some() {}
+             Ok(())
         }
-    }
+        ret = async {
+            for Command {
+                inner: mut command,
+                length,
+                filename,
+            } in commands
+            {
+                let permit = sem.clone().acquire_owned().await?;
+                command.arg("-progress");
+                command.arg("pipe:1");
+                command.stdout(std::process::Stdio::piped());
+                command.stderr(std::process::Stdio::null());
+                let handle = command.spawn()?;
+                let mpb = mpb.clone();
+                let mut rx = tx.subscribe();
 
-    Ok(())
+                js.spawn(async move {
+                    let mut handle = handle;
+                    let stdout = handle.stdout.take().unwrap();
+                    let reader = tokio::io::BufReader::new(stdout);
+                    let mut lines = tokio::io::AsyncBufReadExt::lines(reader);
+
+                    let pb = ProgressBar::new(length.as_micros() as u64);
+                    mpb.add(pb.clone());
+                    pb.set_style(
+                        ProgressStyle::with_template(
+                            "[{elapsed}] {msg} {wide_bar:.cyan/blue} {percent_precise:>6}% (eta: {eta})",
+                        )
+                        .unwrap()
+                        .progress_chars("=>-"),
+                    );
+                    pb.set_message(
+                        filename
+                            .file_name()
+                            .expect("Output should always have a name")
+                            .to_string_lossy()
+                            .to_string(),
+                    );
+
+                    loop {
+                        tokio::select! {
+                            val = lines.next_line() => {
+                                match val {
+                                    Ok(Some(line)) => {
+                                        if let Some("end") = line.strip_prefix("progress=") {
+                                            break;
+                                        }
+                                        if let Some(us) = line.strip_prefix("out_time_us=") {
+                                            let Ok(us) = us.parse() else {
+                                                warn!("Failed to parse out_time_us value: {}", us);
+                                                continue;
+                                            };
+                                            let dur = Duration::from_micros(us);
+                                            pb.set_position(dur.as_micros() as u64);
+                                        }
+                                    }
+                                    _ => break,
+                                }
+                            }
+                            _ = rx.recv() => {
+                                let _ = handle.kill().await;
+                                let _ = handle.wait().await;
+                                pb.finish_and_clear();
+                                drop(permit);
+                                return Err(eyre!("Cancelled"));
+                            }
+                        }
+                    }
+
+                    tokio::select! {
+                        ret = handle.wait() => {
+                            pb.finish_and_clear();
+                            drop(permit);
+                            ret.map_err(|e| e.into())
+                        }
+                        _ = rx.recv() => {
+                            let _ = handle.kill().await;
+                            let _ = handle.wait().await;
+                            pb.finish_and_clear();
+                            drop(permit);
+                            Err(eyre!("Cancelled"))
+                        }
+                    }
+                });
+            }
+
+            while let Some(status) = js.join_next().await {
+                let status = status??;
+                if !status.success() {
+                    error!("Command failed with status code {}", status.code().unwrap_or(-1));
+                }
+            }
+            Ok(())
+        } => ret,
+    }
+}
+
+struct Command {
+    inner: tokio::process::Command,
+    length: Duration,
+    filename: PathBuf,
 }
