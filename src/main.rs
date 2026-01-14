@@ -369,7 +369,15 @@ async fn run_commands(commands: Vec<Command>) -> Result<()> {
 
     let mpb = MultiProgress::new();
     let (tx, _) = broadcast::channel(1);
-
+    let overall_pb = mpb.add(ProgressBar::new(commands.len() as _));
+    overall_pb.set_style(
+        ProgressStyle::with_template(
+            "[{elapsed}] Overall Progress: {wide_bar:.cyan/blue} ({pos}/{len})",
+        )
+        .unwrap()
+        .progress_chars("=>-"),
+    );
+    overall_pb.tick();
     // While the commands are running, the ctrl-c handler is also running.
     // If it receives a ctrl-c, it sends a message to all running tasks to cancel.
     // Each command task polls both its own work, and the cancel message, and if it
@@ -394,8 +402,11 @@ async fn run_commands(commands: Vec<Command>) -> Result<()> {
                 command.arg("pipe:1");
                 command.stdout(std::process::Stdio::piped());
                 command.stderr(std::process::Stdio::null());
+
+                // move closures be like
                 let handle = command.spawn()?;
                 let mpb = mpb.clone();
+                let overall_pb = overall_pb.clone();
                 let mut rx = tx.subscribe();
 
                 js.spawn(async move {
@@ -404,8 +415,7 @@ async fn run_commands(commands: Vec<Command>) -> Result<()> {
                     let reader = tokio::io::BufReader::new(stdout);
                     let mut lines = tokio::io::AsyncBufReadExt::lines(reader);
 
-                    let pb = ProgressBar::new(length.as_micros() as u64);
-                    mpb.add(pb.clone());
+                    let pb = mpb.insert_before(&overall_pb ,ProgressBar::new(length.as_micros() as _));
                     pb.set_style(
                         ProgressStyle::with_template(
                             "[{elapsed}] {msg} {wide_bar:.cyan/blue} {percent_precise:>6}% (eta: {eta})",
@@ -453,6 +463,7 @@ async fn run_commands(commands: Vec<Command>) -> Result<()> {
 
                     tokio::select! {
                         ret = handle.wait() => {
+                            overall_pb.inc(1);
                             pb.finish_and_clear();
                             drop(permit);
                             ret.map_err(|e| e.into())
