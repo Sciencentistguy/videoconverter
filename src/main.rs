@@ -1,13 +1,7 @@
 extern crate ffmpeg_the_third as ffmpeg;
 
 use std::{
-    collections::HashMap,
-    io::ErrorKind,
-    iter,
-    os::unix::prelude::OsStrExt,
-    path::{Path, PathBuf},
-    sync::Arc,
-    time::Duration,
+    collections::HashMap, io::ErrorKind, iter, os::unix::prelude::OsStrExt, path::{Path, PathBuf}, process::Stdio, sync::Arc, time::Duration
 };
 
 mod command;
@@ -25,6 +19,7 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use once_cell::sync::Lazy;
 use question::Answer;
 use tokio::{
+    io::{AsyncBufReadExt, BufReader},
     runtime::Runtime,
     signal,
     sync::{Semaphore, broadcast},
@@ -400,8 +395,8 @@ async fn run_commands(commands: Vec<Command>) -> Result<()> {
                 let permit = sem.clone().acquire_owned().await?;
                 command.arg("-progress");
                 command.arg("pipe:1");
-                command.stdout(std::process::Stdio::piped());
-                command.stderr(std::process::Stdio::null());
+                command.stdout(Stdio::piped());
+                command.stderr(Stdio::null());
 
                 // move closures be like
                 let handle = command.spawn()?;
@@ -412,10 +407,10 @@ async fn run_commands(commands: Vec<Command>) -> Result<()> {
                 js.spawn(async move {
                     let mut handle = handle;
                     let stdout = handle.stdout.take().unwrap();
-                    let reader = tokio::io::BufReader::new(stdout);
-                    let mut lines = tokio::io::AsyncBufReadExt::lines(reader);
+                    let reader = BufReader::new(stdout);
+                    let mut lines = reader.lines();
 
-                    let pb = mpb.insert_before(&overall_pb ,ProgressBar::new(length.as_micros() as _));
+                    let pb = mpb.insert_before(&overall_pb, ProgressBar::new(length.as_micros() as _));
                     pb.set_style(
                         ProgressStyle::with_template(
                             "[{elapsed}] {msg} {wide_bar:.cyan/blue} {percent_precise:>6}% (eta: {eta})",

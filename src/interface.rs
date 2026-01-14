@@ -2,9 +2,9 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use clap::builder::ArgPredicate;
 use clap::Parser;
 use clap::ValueEnum;
+use clap::builder::ArgPredicate;
 use regex::Regex;
 
 #[derive(Parser, Debug)]
