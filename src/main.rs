@@ -1,7 +1,14 @@
 extern crate ffmpeg_the_third as ffmpeg;
 
 use std::{
-    collections::HashMap, io::ErrorKind, iter, os::unix::prelude::OsStrExt, path::{Path, PathBuf}, process::Stdio, sync::Arc, time::Duration
+    collections::HashMap,
+    io::ErrorKind,
+    iter,
+    os::unix::prelude::OsStrExt,
+    path::{Path, PathBuf},
+    process::Stdio,
+    sync::Arc,
+    time::Duration,
 };
 
 mod command;
@@ -364,15 +371,21 @@ async fn run_commands(commands: Vec<Command>) -> Result<()> {
 
     let mpb = MultiProgress::new();
     let (tx, _) = broadcast::channel(1);
-    let overall_pb = mpb.add(ProgressBar::new(commands.len() as _));
-    overall_pb.set_style(
-        ProgressStyle::with_template(
-            "[{elapsed}] Overall Progress: {wide_bar:.cyan/blue} ({pos}/{len})",
-        )
-        .unwrap()
-        .progress_chars("=>-"),
-    );
-    overall_pb.tick();
+    let overall_pb = if commands.len() > 1 {
+        let overall_pb = mpb.add(ProgressBar::new(commands.len() as _));
+        overall_pb.set_style(
+            ProgressStyle::with_template(
+                "[{elapsed}] Overall Progress: {wide_bar:.cyan/blue} ({pos}/{len})",
+            )
+            .unwrap()
+            .progress_chars("=>-"),
+        );
+        overall_pb.enable_steady_tick(Duration::from_secs(1));
+        Some(overall_pb)
+    } else {
+        None
+    };
+
     // While the commands are running, the ctrl-c handler is also running.
     // If it receives a ctrl-c, it sends a message to all running tasks to cancel.
     // Each command task polls both its own work, and the cancel message, and if it
@@ -410,7 +423,13 @@ async fn run_commands(commands: Vec<Command>) -> Result<()> {
                     let reader = BufReader::new(stdout);
                     let mut lines = reader.lines();
 
-                    let pb = mpb.insert_before(&overall_pb, ProgressBar::new(length.as_micros() as _));
+                    let pb = ProgressBar::new(length.as_micros() as _);
+                    if let Some(overall_pb) = &overall_pb {
+                        mpb.insert_before(overall_pb, pb.clone());
+                    } else {
+                        mpb.add(pb.clone());
+                    }
+
                     pb.set_style(
                         ProgressStyle::with_template(
                             "[{elapsed}] {msg} {wide_bar:.cyan/blue} {percent_precise:>6}% (eta: {eta})",
@@ -458,7 +477,7 @@ async fn run_commands(commands: Vec<Command>) -> Result<()> {
 
                     tokio::select! {
                         ret = handle.wait() => {
-                            overall_pb.inc(1);
+                            overall_pb.inspect(|pb| pb.inc(1));
                             pb.finish_and_clear();
                             drop(permit);
                             ret.map_err(|e| e.into())
