@@ -180,6 +180,9 @@ pub struct Args {
     /// behaviour
     #[clap(long, conflicts_with = "all_streams")]
     pub discard_attachments: bool,
+
+    #[clap(long)]
+    pub normalize_titles: bool,
 }
 
 impl Args {

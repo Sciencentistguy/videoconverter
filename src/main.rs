@@ -240,11 +240,7 @@ fn main() -> Result<()> {
 
             print!("Mapping stream {file}:{index}: {oldcodec:?} ");
 
-            if let Some(title) = stream
-                .as_audio()
-                .map(|x| x.title.as_deref())
-                .or_else(|| stream.as_subtitle().map(|x| x.title.as_deref()))
-            {
+            if let Some(title) = stream.get_original_title() {
                 print!("'{}' ", title.unwrap_or("[untitled]"));
             }
 
@@ -256,10 +252,18 @@ fn main() -> Result<()> {
                     print!("(5.1) ");
                 } else if layout == ChannelLayout::_7POINT1 {
                     print!("(7.1) ");
+                } else {
+                    print!("({layout:?})");
                 }
             }
 
-            print!("-> {newcodec:?} ");
+            print!("-> ");
+
+            if let Some(title) = stream.get_title() {
+                print!("'{}' ", title);
+            }
+
+            print!("{newcodec:?} ");
 
             if codec.is_none() {
                 print!("(copy) ")

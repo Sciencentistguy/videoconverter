@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::iter::Iterator;
 use std::path::Path;
 use std::path::PathBuf;
-use std::process::Stdio;
 
 use crate::ARGS;
 use crate::input::FieldOrder;
@@ -375,6 +374,20 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             command.args(["-map", &format!("{}:t:?", i)]);
         }
     }
+
+    // Ensure all streams have titles
+    for (i, sub_stream) in mappings.subtitle.iter().enumerate() {
+        let sub_stream = sub_stream.as_subtitle().unwrap();
+        command.arg(format!("-metadata:s:s:{i}"));
+        command.arg(format!("title={}", sub_stream.title));
+    }
+
+    for (i, audio_stream) in mappings.audio.iter().enumerate() {
+        let audio_stream = audio_stream.as_audio().unwrap();
+        command.arg(format!("-metadata:s:a:{i}"));
+        command.arg(format!("title={}", audio_stream.title));
+    }
+
     command.arg(output_path.as_ref().as_os_str());
 
     Ok(command)
