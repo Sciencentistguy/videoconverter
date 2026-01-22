@@ -79,9 +79,15 @@ impl TVOptions {
         };
 
         let episode = loop {
-            if let Ok(x) = util::prompt("Enter the index of the first episode in this directory:")
-                .parse::<u32>()
-            {
+            let prompt = if let Some(previous_state) = &previous_state && using_db {
+                format!(
+                    "Enter the index of the first episode in this directory (previous: {}):",
+                    previous_state.episode
+                )
+            } else {
+                "Enter the index of the first episode in this directory:".to_string()
+            };
+            if let Ok(x) = util::prompt(&prompt).parse::<u32>() {
                 break x;
             }
         };

@@ -117,4 +117,18 @@ impl Db {
             )
             .unwrap();
     }
+
+
+    pub fn update_episode(&self, title: &str, episode: u32) {
+        trace!(title = %title, episode = %episode, "Updating episode number in DB.");
+        self.connection
+            .execute(
+                "UPDATE entries
+                     SET episode = ?1
+                     WHERE title = ?2;
+                    ",
+                params![episode, title],
+            )
+            .unwrap();
+    }
 }

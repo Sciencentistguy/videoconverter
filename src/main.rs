@@ -313,6 +313,10 @@ fn main() -> Result<()> {
         }
     }
 
+    if let Some(TVOptions { title, episode, .. }) = tv_options {
+        db.update_episode(&title, episode - 1);
+    }
+
     if ARGS.print_commands {
         for command in &commands {
             let command = command.inner.as_std();
