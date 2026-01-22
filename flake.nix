@@ -85,7 +85,7 @@
         };
     in rec {
       packages.videoconverter = pkgs.callPackage videoconverter {
-        ffmpeg = pkgs.ffmpeg_7.override {
+        ffmpeg = pkgs.ffmpeg_8.override {
           ffmpegVariant = "full";
           withFullDeps = true;
           withUnfree = true;
@@ -93,7 +93,7 @@
         inherit rustPlatform;
       };
       packages.videoconverter-ci = pkgs.callPackage videoconverter {
-        ffmpeg = pkgs.ffmpeg_7;
+        ffmpeg = pkgs.ffmpeg_8;
         inherit rustPlatform;
       };
 

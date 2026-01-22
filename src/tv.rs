@@ -79,7 +79,9 @@ impl TVOptions {
         };
 
         let episode = loop {
-            let prompt = if let Some(previous_state) = &previous_state && using_db {
+            let prompt = if let Some(previous_state) = &previous_state
+                && using_db
+            {
                 format!(
                     "Enter the index of the first episode in this directory (previous: {}):",
                     previous_state.episode

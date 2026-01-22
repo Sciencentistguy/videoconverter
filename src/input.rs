@@ -7,13 +7,13 @@ use crate::interface::AudioReencodeType;
 use crate::interface::StreamRef;
 use crate::interface::VideoEncoder;
 
+use ffmpeg::ChannelLayout;
 pub use ffmpeg::codec;
 pub use ffmpeg::codec::Context;
 pub use ffmpeg::codec::Parameters;
 pub use ffmpeg::format::context::Input;
 use ffmpeg::format::stream::Disposition;
 pub use ffmpeg::media::Type;
-use ffmpeg_sys_the_third::AVChannelLayout;
 use tracing::*;
 
 #[derive(Debug, Clone, Copy)]
@@ -38,8 +38,8 @@ pub struct Audio {
     pub index: usize,
     pub codec: codec::Id,
     pub lang: Option<String>,
-    pub channels: u32,
-    pub channel_layout: AVChannelLayout,
+    pub channels: i32,
+    pub channel_layout: ChannelLayout,
     pub profile: Option<ffmpeg::codec::Profile>,
     pub original_title: Option<String>,
     pub title: String,
@@ -112,6 +112,7 @@ impl Stream {
         let codec = codec_parameters.id();
 
         let decoder = codec_context.decoder().video();
+        // SAFETY: we have a shared reference to the decoder, and field_order is a repr(u32) enum that owns no resources
         let field_order = match unsafe { decoder.map(|x| (*x.as_ptr()).field_order) } {
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_PROGRESSIVE) => FieldOrder::Progressive,
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_TT) => FieldOrder::Interlaced,
@@ -119,7 +120,6 @@ impl Stream {
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_BT) => FieldOrder::Interlaced,
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_BB) => FieldOrder::Interlaced,
             Ok(ffmpeg::ffi::AVFieldOrder::AV_FIELD_UNKNOWN) => FieldOrder::Unknown,
-            Ok(_) => FieldOrder::Unknown,
 
             Err(x) => {
                 error!(stream = %index, err = ?x, "Error getting field order");
@@ -146,7 +146,7 @@ impl Stream {
         let codec = codec_parameters.id();
         let lang = tags.get("language").map(|f| f.to_string());
         let decoder = codec_context.decoder().audio().unwrap();
-        let channel_layout = decoder.ch_layout().to_owned();
+        let channel_layout = decoder.channel_layout().to_owned();
         let channels = channel_layout.channels();
         let profile = match decoder.profile() {
             codec::Profile::Unknown => None,
@@ -171,7 +171,7 @@ impl Stream {
             codec,
             lang,
             channels,
-            channel_layout: channel_layout.into_owned(),
+            channel_layout: channel_layout.to_owned(),
             profile,
             original_title,
             title,

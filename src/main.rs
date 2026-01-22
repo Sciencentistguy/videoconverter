@@ -1,4 +1,4 @@
-extern crate ffmpeg_the_third as ffmpeg;
+extern crate ffmpeg_next as ffmpeg;
 
 use std::{
     collections::HashMap,
@@ -237,15 +237,14 @@ fn main() -> Result<()> {
             }
 
             if let Stream::Audio(audio) = stream {
-                let layout = ChannelLayout::from(&audio.channel_layout);
-                if layout == ChannelLayout::STEREO {
+                if audio.channel_layout == ChannelLayout::STEREO {
                     print!("(2.0) ");
-                } else if layout == ChannelLayout::_5POINT1 {
+                } else if audio.channel_layout == ChannelLayout::_5POINT1 {
                     print!("(5.1) ");
-                } else if layout == ChannelLayout::_7POINT1 {
+                } else if audio.channel_layout == ChannelLayout::_7POINT1 {
                     print!("(7.1) ");
                 } else {
-                    print!("({layout:?})");
+                    print!("({:?})", audio.channel_layout);
                 }
             }
 
