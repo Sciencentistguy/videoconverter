@@ -46,7 +46,8 @@ pub struct Args {
     #[clap(
         long("audio-lang"),
         default_value("eng"),
-        conflicts_with("all_streams")
+        conflicts_with("all_streams"),
+        default_values_if("anime", ArgPredicate::IsPresent, &["jpn", "eng"])
     )]
     pub audio_languages: Vec<String>,
 
@@ -124,7 +125,11 @@ pub struct Args {
 
     /// Moves the `default_audio_stream`th audio stream with the given language code to the front, and marks it as
     /// default.
-    #[clap(long, value_name = "LANGUAGE")]
+    #[clap(
+        long,
+        value_name = "LANGUAGE",
+        default_value_if("anime", ArgPredicate::IsPresent, "jpn")
+    )]
     pub default_audio_language: Option<String>,
 
     /// Moves the `default_subtitle_stream`th subtitle stream with the given language code to the front, and marks it as
@@ -181,8 +186,13 @@ pub struct Args {
     #[clap(long, conflicts_with = "all_streams")]
     pub discard_attachments: bool,
 
+    /// Normalize all stream titles to their language
     #[clap(long)]
     pub normalize_titles: bool,
+
+    /// Implies '--default-audio-language jpn --audio-lang jpn --audio-lang eng'
+    #[clap(long)]
+    pub anime: bool,
 }
 
 impl Args {
