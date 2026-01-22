@@ -7,6 +7,9 @@ use clap::ValueEnum;
 use clap::builder::ArgPredicate;
 use regex::Regex;
 
+const NNEDI_WEIGHTS_PATH: &str = "~/.ffmpeg/nnedi3_weights.bin";
+const FFMPEG_BIN_PATH: &str = "ffmpeg";
+
 #[derive(Parser, Debug)]
 #[clap(name = "videoconverter", version, author)]
 pub struct Args {
@@ -146,8 +149,12 @@ pub struct Args {
     pub default_subtitle_stream: usize,
 
     /// Weights file for nnedi3 deinterlace filter
-    #[clap(long, default_value = "~/.ffmpeg/nnedi3_weights")]
+    #[clap(long, default_value = NNEDI_WEIGHTS_PATH)]
     pub nnedi_weights: String,
+
+    /// Path to ffmpeg binary
+    #[clap(long, default_value = FFMPEG_BIN_PATH)]
+    pub ffmpeg_path: PathBuf,
 
     /// Overwrite output file, instead of erroring out.
     #[clap(long)]

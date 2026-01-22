@@ -52,13 +52,11 @@
           cargoLock.lockFile = ./Cargo.lock;
 
           prePatch = ''
-            substituteInPlace src/command.rs \
-              --replace 'const FFMPEG_BIN_PATH: &str = "ffmpeg";'\
-                        'const FFMPEG_BIN_PATH: &str = "${ffmpeg}/bin/ffmpeg";'
-
             substituteInPlace src/interface.rs \
-              --replace '"~/.ffmpeg/nnedi3_weights"'\
-                        '"${nnedi_weights}"'
+              --replace-warn 'const FFMPEG_BIN_PATH: &str = "ffmpeg";'\
+                        'const FFMPEG_BIN_PATH: &str = "${ffmpeg}/bin/ffmpeg";' \
+              --replace-warn 'const NNEDI_WEIGHTS_PATH: &str = "~/.ffmpeg/nnedi3_weights.bin";'\
+                        'const NNEDI_WEIGHTS_PATH: &str = "${nnedi_weights}";' \
           '';
 
           nativeBuildInputs = [
@@ -105,17 +103,8 @@
 
       devShells.default = pkgs.mkShell {
         inputsFrom = [
-            packages.videoconverter-ci
+          packages.videoconverter-ci
         ];
-        # buildInputs = [
-          # rustToolchain
-          # fenixStable.rustfmt
-          # fenixStable.clippy
-          # pkgs.cargo-edit
-          # pkgs.pkg-config
-          # pkgs.ffmpeg_7
-          # pkgs.libiconv
-        # ];
         RUST_SRC_PATH = "${fenixStable.rust-src}/lib/rustlib/src/rust/library";
       };
     });

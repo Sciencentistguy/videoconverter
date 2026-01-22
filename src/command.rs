@@ -15,8 +15,6 @@ use itertools::Itertools;
 use tokio::process::Command;
 use tracing::*;
 
-const FFMPEG_BIN_PATH: &str = "ffmpeg";
-
 pub fn generate_output_filename<P: AsRef<Path>>(path: P, tv_options: &Option<TVOptions>) -> String {
     let path = path.as_ref();
     if let Some(tv_options) = tv_options {
@@ -77,7 +75,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     mut mappings: StreamMappings,
     target_codecs: HashMap<usize, Option<codec::Id>>,
 ) -> Result<Command, CommandError> {
-    let mut command = Command::new(FFMPEG_BIN_PATH);
+    let mut command = Command::new(&ARGS.ffmpeg_path);
     command.arg("-hide_banner"); // Remove gpl banner
 
     if !ARGS.simulate && output_path.as_ref().exists() {
