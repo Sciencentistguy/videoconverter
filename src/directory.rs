@@ -23,7 +23,7 @@ impl OutputDir {
         if self.0.is_dir() {
             info!(dir = ?self.0, "Directory already exists");
         } else {
-            std::fs::create_dir(&self.0)?;
+            std::fs::create_dir_all(&self.0)?;
             info!(dir = ?self.0, "Created directory");
         }
 
