@@ -98,8 +98,6 @@ fn main() -> Result<()> {
                         }; // Remove filles with no extension
 
                         // Remove files of the form `*.r00`, `*.r01`, etc
-                        let is_rar_segment = matches!(file_extension.strip_prefix('r'), Some(s) if s.chars().all(|c| c.is_ascii_digit()));
-
                         if ARGS
                             .ignored_extensions
                             .iter()
@@ -112,7 +110,7 @@ fn main() -> Result<()> {
                             return false;
                         }
 
-                        if is_rar_segment {
+                        if matches!(file_extension.strip_prefix('r'), Some(s) if s.chars().all(|c| c.is_ascii_digit())) {
                             return false;
                         }
 

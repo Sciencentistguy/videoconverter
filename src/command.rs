@@ -3,15 +3,17 @@ use std::iter::Iterator;
 use std::path::Path;
 use std::path::PathBuf;
 
-use crate::ARGS;
 use crate::input::FieldOrder;
 use crate::input::Stream;
 use crate::input::StreamMappings;
 use crate::interface::VideoEncoder;
 use crate::tv::TVOptions;
+use crate::util;
+use crate::ARGS;
 
 use ffmpeg::codec;
 use itertools::Itertools;
+use question::Answer;
 use tokio::process::Command;
 use tracing::*;
 
@@ -79,10 +81,19 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     command.arg("-hide_banner"); // Remove gpl banner
 
     if !ARGS.simulate && output_path.as_ref().exists() {
-        if ARGS.overwrite {
+        if ARGS.overwrite
+            || util::confirm(
+                &format!(
+                    "Output file '{}' already exists. Overwrite?",
+                    output_path.as_ref().display()
+                ),
+                Some(Answer::YES),
+            )
+        {
             warn!(file = ?output_path.as_ref().to_string_lossy(),
                 "Output file already exists. Overwriting"
             );
+            command.arg("-y");
         } else {
             error!(file = ?output_path.as_ref().to_string_lossy(),
                 "Output file already exists."
