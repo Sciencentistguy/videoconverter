@@ -102,6 +102,10 @@ pub struct Args {
     #[clap(long)]
     pub output_path: Option<PathBuf>,
 
+    /// The directory prefix to insert tv shows to
+    #[clap(long, env = "VIDEOCONVERTER_OUTPUT_PREFIX")]
+    pub output_prefix: Option<PathBuf>,
+
     /// Enables renaming of files to TV show format
     #[clap(long, short = 'T')]
     pub tv_mode: bool,

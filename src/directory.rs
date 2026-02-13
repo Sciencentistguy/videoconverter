@@ -5,18 +5,34 @@ use std::{
 
 use tracing::info;
 
-use crate::tv::TVOptions;
+use crate::{tv::TVOptions, ARGS};
 
 pub struct OutputDir(pub PathBuf);
 
 impl OutputDir {
-    pub fn new(path: &Path, tv_options: &Option<TVOptions>) -> Self {
-        let output_dir = if let Some(tv_options) = tv_options {
-            path.join(format!("Season {:02}", tv_options.season))
+    pub fn new(tv_options: &Option<TVOptions>) -> Self {
+        // let path = match ARGS
+        // .output_prefix
+        // .as_deref() {
+        // None => ARGS.output_path.as_deref().unwrap_or(Path::new(".")),
+        // Some(prefix)
+        // };
+
+        Self(if let Some(TVOptions { title, season, .. }) = tv_options {
+            let mut path = ARGS
+                .output_prefix
+                .as_deref()
+                .map(|prefix| {
+                    // prefix + tv title
+                    prefix.join(title)
+                })
+                .unwrap_or_else(|| Path::new(".").to_owned());
+
+            path.push(format!("Season {:02}", season));
+            path
         } else {
-            path.join("newfiles")
-        };
-        Self(output_dir)
+            Path::new("./newfiles").to_owned()
+        })
     }
 
     pub fn create(&self) -> io::Result<()> {

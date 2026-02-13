@@ -166,12 +166,7 @@ fn main() -> Result<()> {
 
     let mut commands = Vec::with_capacity(entries.len());
 
-    let output_dir = OutputDir::new(
-        // Path::new is free (a transmute). Clippy is wrong.
-        #[allow(clippy::or_fun_call)]
-        ARGS.output_path.as_deref().unwrap_or(Path::new(".")),
-        &tv_options,
-    );
+    let output_dir = OutputDir::new(&tv_options);
 
     let mut errored_paths = Vec::new();
 

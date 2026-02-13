@@ -3,13 +3,13 @@ use std::iter::Iterator;
 use std::path::Path;
 use std::path::PathBuf;
 
+use crate::ARGS;
 use crate::input::FieldOrder;
 use crate::input::Stream;
 use crate::input::StreamMappings;
 use crate::interface::VideoEncoder;
 use crate::tv::TVOptions;
 use crate::util;
-use crate::ARGS;
 
 use ffmpeg::codec;
 use itertools::Itertools;
