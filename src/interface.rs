@@ -2,9 +2,9 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use clap::builder::ArgPredicate;
 use clap::Parser;
 use clap::ValueEnum;
-use clap::builder::ArgPredicate;
 use regex::Regex;
 
 const NNEDI_WEIGHTS_PATH: &str = "~/.ffmpeg/nnedi3_weights.bin";
@@ -204,6 +204,10 @@ pub struct Args {
     /// Implies '--default-audio-language jpn --audio-lang jpn --audio-lang eng'
     #[clap(long)]
     pub anime: bool,
+
+    /// Specific stream IDs to unconditionally drop.
+    #[clap(long)]
+    pub drop_stream: Vec<usize>,
 }
 
 impl Args {

@@ -384,6 +384,15 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         }
     }
 
+    // drop stream N from every file
+    // note that is is very unlikely that subtitle files will have more than one stream, and
+    // dropping stream 0 would be a very strange thing to do
+    for index in &ARGS.drop_stream {
+        for file in 0..(associated_subs.len() + 1) {
+            command.args(["-map", &format!("-{}:{}", file, index)]);
+        }
+    }
+
     // Ensure all streams have titles
     for (i, sub_stream) in mappings.subtitle.iter().enumerate() {
         let sub_stream = sub_stream.as_subtitle().unwrap();
