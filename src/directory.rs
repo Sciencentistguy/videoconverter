@@ -5,7 +5,7 @@ use std::{
 
 use tracing::info;
 
-use crate::{tv::TVOptions, ARGS};
+use crate::{ARGS, tv::TVOptions};
 
 pub struct OutputDir(pub PathBuf);
 

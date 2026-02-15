@@ -399,7 +399,7 @@ fn is_lossless(x: &Audio) -> bool {
 }
 
 pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Option<codec::Id>> {
-    use codec::Id::{AAC, DVD_SUBTITLE, FLAC, H264, HDMV_PGS_SUBTITLE, HEVC, SSA};
+    use codec::Id::{AAC, DVD_SUBTITLE, FLAC, H264, HDMV_PGS_SUBTITLE, HEVC, MOV_TEXT, SSA};
 
     stream_mappings
         .iter()
@@ -428,9 +428,11 @@ pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Opt
                         _ => None,
                     },
                 ),
-                Stream::Subtitle(subtitle) if ARGS.reencode_subs => match subtitle.codec {
+                Stream::Subtitle(subtitle) => match subtitle.codec {
+                    MOV_TEXT => (index, Some(SSA)), // MOV_TEXT is not supported in mkv
                     HDMV_PGS_SUBTITLE | DVD_SUBTITLE => (index, None),
-                    _ => (index, Some(SSA)),
+                    _ if ARGS.reencode_subs => (index, Some(SSA)),
+                    _ => (index, None),
                 },
                 _ => (index, None),
             }
