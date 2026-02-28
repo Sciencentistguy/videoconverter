@@ -1,23 +1,13 @@
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
+use std::{io, path::PathBuf};
 
 use tracing::info;
 
-use crate::{ARGS, tv::TVOptions};
+use crate::{tv::TVOptions, ARGS};
 
 pub struct OutputDir(pub PathBuf);
 
 impl OutputDir {
     pub fn new(tv_options: &Option<TVOptions>) -> Self {
-        // let path = match ARGS
-        // .output_prefix
-        // .as_deref() {
-        // None => ARGS.output_path.as_deref().unwrap_or(Path::new(".")),
-        // Some(prefix)
-        // };
-
         Self(if let Some(TVOptions { title, season, .. }) = tv_options {
             let mut path = ARGS
                 .output_prefix
@@ -26,12 +16,17 @@ impl OutputDir {
                     // prefix + tv title
                     prefix.join(title)
                 })
-                .unwrap_or_else(|| Path::new(".").to_owned());
+                .unwrap_or_else(|| {
+                    std::env::current_dir().expect("Current working directory should exist")
+                });
 
             path.push(format!("Season {:02}", season));
             path
         } else {
-            Path::new("./newfiles").to_owned()
+            let mut base_path =
+                std::env::current_dir().expect("Current working directory should exist");
+            base_path.push("newfiles");
+            base_path
         })
     }
 

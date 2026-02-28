@@ -20,6 +20,7 @@ mod util;
 
 use clap::Parser;
 use color_eyre::eyre::{Context, Result, eyre};
+use colored::Colorize;
 use ffmpeg::ChannelLayout;
 use once_cell::sync::Lazy;
 use question::Answer;
@@ -208,11 +209,28 @@ fn main() -> Result<()> {
             std::process::exit(1);
         }
 
-        println!(
-            "Input file '{}' -> '{}':",
-            input_filepath.display(),
-            output_path.display(),
-        );
+        print!("Input file '{}' -> ", input_filepath.display(),);
+
+        // We print the destination path step-by-step to tell the user which directories in the
+        // output path will be created, and which already exists. This is mainly useful for the
+        // --output-prefix argument
+        for path_element in &output_path.ancestors().skip(1).collect::<Vec<_>>()[..output_path.ancestors().skip(1).collect::<Vec<_>>().len() - 1] {
+            // We skip "/" as we do that in the format call, meaning every `path_element` will have
+            // a name
+            let path_segment = path_element.file_name().unwrap().display().to_string();
+            let path_segment = if path_element.exists() {
+                if !path_element.is_dir() {
+                    path_segment.bold().red()
+                } else {
+                    path_segment.into()
+                }
+            } else {
+                path_segment.bold().green()
+            };
+            print!("/{}", path_segment);
+        }
+        println!("/{}", output_path.file_name().unwrap().display());
+
         for stream in mappings.iter() {
             let file = stream.file();
             let index = stream.index();
@@ -277,7 +295,9 @@ fn main() -> Result<()> {
             parsed.iter().filter(|&x| x.as_audio().is_some()).count() - mappings.audio.len();
         let dropped_subs =
             parsed.iter().filter(|&x| x.as_subtitle().is_some()).count() - mappings.subtitle.len();
-        println!("Dropping {dropped_audio} audio streams and {dropped_subs} subtitle streams",);
+        if dropped_audio != 0 || dropped_subs != 0 {
+            println!("Dropping {dropped_audio} audio streams and {dropped_subs} subtitle streams",);
+        }
 
         let command = command::generate_ffmpeg_command(
             input_filepath,
