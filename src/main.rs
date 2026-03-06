@@ -189,11 +189,11 @@ fn main() -> Result<()> {
 
     println!(
         "{}{} {}{} {}{}",
-        "Green".green().dimmed(),
+        "Green".green().dimmed().bold(),
         ": will be created".dimmed(),
         "Red".red(),
         ": cannot be created".dimmed(),
-        "Red".red().dimmed(),
+        "Dark Red".red().dimmed(),
         ": will be overwritten".dimmed()
     );
 
@@ -425,6 +425,7 @@ fn print_path_colourised(output_path: &Path) {
             .display()
             .to_string()
             .green()
+            .bold()
             .dimmed()
     };
     println!("/{}", output_name);
