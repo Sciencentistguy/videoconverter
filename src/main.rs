@@ -135,6 +135,22 @@ fn main() -> Result<()> {
     let db = Db::new().unwrap();
 
     let mut tv_options = TVOptions::from_cli(&db, title.as_deref());
+    let rename_title = if tv_options.is_none() && entries.len() == 1 {
+        let rename = util::confirm("Rename the file?", None);
+        if rename {
+            let mut title;
+            Some(loop {
+                title = util::prompt("Title to rename to:");
+                if !title.is_empty() {
+                    break title;
+                }
+            })
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     if let Some(ref tv_options) = tv_options {
         db.write(tv_options);
@@ -167,7 +183,7 @@ fn main() -> Result<()> {
 
     let mut commands = Vec::with_capacity(entries.len());
 
-    let output_dir = OutputDir::new(&tv_options);
+    let output_dir = OutputDir::new(&tv_options, &rename_title);
 
     let mut errored_paths = Vec::new();
 
@@ -180,7 +196,8 @@ fn main() -> Result<()> {
             }
         };
 
-        let output_filename = command::generate_output_filename(input_filepath, &tv_options);
+        let output_filename =
+            command::generate_output_filename(input_filepath, &tv_options, rename_title.as_deref());
         let output_path = output_dir.0.join(output_filename);
 
         if let Some(ref mut tv_options) = tv_options {
@@ -209,27 +226,22 @@ fn main() -> Result<()> {
             std::process::exit(1);
         }
 
-        print!("Input file '{}' -> ", input_filepath.display(),);
+        println!(
+            "{}{} {}{} {}{}",
+            "Green".green().dimmed(),
+            ": will be created".dimmed(),
+            "Red".red(),
+            ": cannot be created".dimmed(),
+            "Red".red().dimmed(),
+            ": will be overwritten".dimmed()
+        );
+
+        print!("Input file '{}' -> ", input_filepath.display());
 
         // We print the destination path step-by-step to tell the user which directories in the
         // output path will be created, and which already exists. This is mainly useful for the
         // --output-prefix argument
-        for path_element in &output_path.ancestors().skip(1).collect::<Vec<_>>()[..output_path.ancestors().skip(1).collect::<Vec<_>>().len() - 1] {
-            // We skip "/" as we do that in the format call, meaning every `path_element` will have
-            // a name
-            let path_segment = path_element.file_name().unwrap().display().to_string();
-            let path_segment = if path_element.exists() {
-                if !path_element.is_dir() {
-                    path_segment.bold().red()
-                } else {
-                    path_segment.into()
-                }
-            } else {
-                path_segment.bold().green()
-            };
-            print!("/{}", path_segment);
-        }
-        println!("/{}", output_path.file_name().unwrap().display());
+        print_path_colourised(output_path.as_path());
 
         for stream in mappings.iter() {
             let file = stream.file();
@@ -372,4 +384,48 @@ struct Command {
     inner: tokio::process::Command,
     length: Duration,
     filename: PathBuf,
+}
+
+fn print_path_colourised(output_path: &Path) {
+    for path_element in output_path.ancestors().skip(1).collect::<Vec<_>>()
+        [..output_path.ancestors().skip(1).collect::<Vec<_>>().len() - 1]
+        .iter()
+        .rev()
+    {
+        // We skip "/" as we do that in the format call, meaning every `path_element` will have
+        // a name
+        let path_segment = path_element.file_name().unwrap().display().to_string();
+        let path_segment = if path_element.exists() {
+            if !path_element.is_dir() {
+                path_segment.bold().red()
+            } else {
+                path_segment.into()
+            }
+        } else {
+            path_segment.bold().green().dimmed()
+        };
+        print!("/{}", path_segment);
+    }
+    let output_name = if output_path.exists() {
+        if ARGS.overwrite {
+            output_path
+                .file_name()
+                .unwrap()
+                .display()
+                .to_string()
+                .red()
+                .dimmed()
+        } else {
+            output_path.file_name().unwrap().display().to_string().red()
+        }
+    } else {
+        output_path
+            .file_name()
+            .unwrap()
+            .display()
+            .to_string()
+            .green()
+            .dimmed()
+    };
+    println!("/{}", output_name);
 }

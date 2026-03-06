@@ -14,16 +14,27 @@ use crate::util;
 use ffmpeg::codec;
 use itertools::Itertools;
 use question::Answer;
+use tap::Tap;
 use tokio::process::Command;
 use tracing::*;
 
-pub fn generate_output_filename<P: AsRef<Path>>(path: P, tv_options: &Option<TVOptions>) -> String {
+pub fn generate_output_filename<P: AsRef<Path>>(
+    path: P,
+    tv_options: &Option<TVOptions>,
+    rename_title: Option<&str>,
+) -> String {
     let path = path.as_ref();
     if let Some(tv_options) = tv_options {
         format!(
             "{} - s{:02}e{:02}.mkv",
             tv_options.title, tv_options.season, tv_options.episode
         )
+    } else if let Some(rename_title) = rename_title {
+        rename_title.to_owned().tap_mut(|rename_title| {
+            if !rename_title.ends_with(".mkv") {
+                rename_title.push_str(".mkv")
+            }
+        })
     } else {
         let input_filename = path
             .file_name()

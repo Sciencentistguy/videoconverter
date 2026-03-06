@@ -2,12 +2,12 @@ use std::{io, path::PathBuf};
 
 use tracing::info;
 
-use crate::{tv::TVOptions, ARGS};
+use crate::{ARGS, tv::TVOptions};
 
 pub struct OutputDir(pub PathBuf);
 
 impl OutputDir {
-    pub fn new(tv_options: &Option<TVOptions>) -> Self {
+    pub fn new(tv_options: &Option<TVOptions>, rename_title: &Option<String>) -> Self {
         Self(if let Some(TVOptions { title, season, .. }) = tv_options {
             let mut path = ARGS
                 .output_prefix
@@ -22,9 +22,14 @@ impl OutputDir {
 
             path.push(format!("Season {:02}", season));
             path
+        } else if let Some(output_prefix) = ARGS.output_prefix.as_deref()
+            && rename_title.is_some()
+        {
+            output_prefix.to_owned()
         } else {
             let mut base_path =
                 std::env::current_dir().expect("Current working directory should exist");
+            dbg!(&base_path);
             base_path.push("newfiles");
             base_path
         })
