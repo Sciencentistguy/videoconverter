@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::Parser;
+use clap::Subcommand;
 use clap::ValueEnum;
 use clap::builder::ArgPredicate;
 use regex::Regex;
@@ -208,6 +209,14 @@ pub struct Args {
     /// Specific stream IDs to unconditionally drop.
     #[clap(long)]
     pub drop_stream: Vec<usize>,
+
+    /// Dump the contents of the sqlite db
+    #[clap(long)]
+    pub dump_db: bool,
+
+    /// Remove the specified entry from the sqlite db
+    #[clap(long, value_name = "TITLE")]
+    pub remove_db_entry: Option<String>,
 }
 
 impl Args {

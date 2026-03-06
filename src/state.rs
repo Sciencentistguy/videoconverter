@@ -1,8 +1,9 @@
-use crate::{ARGS, tv::TVOptions};
+use crate::{ARGS, Result, tv::TVOptions};
 
 use std::error::Error;
 
 use rusqlite::{Connection, OptionalExtension, params};
+use tabular::{Row, Table, row};
 use tap::Tap;
 use tracing::*;
 
@@ -129,5 +130,38 @@ impl Db {
                 params![episode, title],
             )
             .unwrap();
+    }
+
+    pub fn dump(&self) -> Result<()> {
+        let mut stmt = self.connection.prepare(
+            "SELECT title, season, episode
+                 FROM entries",
+        )?;
+        let mut rows = stmt.query([])?;
+        let mut table = Table::new("{:<} {:<} {:<}");
+        table.add_row(row!("Title", "Season", "Episode",));
+        table.add_heading("---");
+        while let Some(row) = rows.next()? {
+            table.add_row(row!(
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, i64>(2)?
+            ));
+        }
+        println!("{}", table);
+        Ok(())
+    }
+
+    pub fn remove_entry(&self, title: &str) -> Result<()> {
+        let count = self
+            .connection
+            .execute("DELETE FROM entries WHERE title = ?1", params![title])?;
+        match count {
+            0 => println!("Entry for '{}' not found", title),
+            1 => println!("Successfully deleted entry for '{}'", title),
+            count => println!("Successfully deleted {} entries for '{}'", count, title),
+        }
+
+        Ok(())
     }
 }

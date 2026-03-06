@@ -51,10 +51,19 @@ fn main() -> Result<()> {
 
     debug!(?ARGS);
 
+    let db = Db::new().unwrap();
+
     // Shut libav* up
     // Safety: No other threads exist, mutating global state is fine.
     unsafe {
         ffmpeg::ffi::av_log_set_level(ffmpeg::ffi::AV_LOG_FATAL);
+    }
+
+    if ARGS.dump_db {
+        return db.dump();
+    }
+    if let Some(title) = &ARGS.remove_db_entry {
+        return db.remove_entry(title);
     }
 
     let entries = {
@@ -131,8 +140,6 @@ fn main() -> Result<()> {
     let title = entries
         .first()
         .and_then(|x| x.file_name().map(|y| y.to_string_lossy()));
-
-    let db = Db::new().unwrap();
 
     let mut tv_options = TVOptions::from_cli(&db, title.as_deref());
     let rename_title = if tv_options.is_none() && entries.len() == 1 {
