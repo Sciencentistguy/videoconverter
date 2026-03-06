@@ -3,7 +3,7 @@ use crate::{ARGS, Result, tv::TVOptions};
 use std::error::Error;
 
 use rusqlite::{Connection, OptionalExtension, params};
-use tabular::{Row, Table, row};
+use tabular::{Table, row};
 use tap::Tap;
 use tracing::*;
 

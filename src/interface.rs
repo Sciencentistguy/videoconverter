@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use clap::Parser;
-use clap::Subcommand;
 use clap::ValueEnum;
 use clap::builder::ArgPredicate;
 use regex::Regex;

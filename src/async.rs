@@ -154,7 +154,11 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
             while let Some(status) = js.join_next().await {
                 let status = status??;
                 if !status.success() {
-                    error!("Command failed with status code {}", status.code().unwrap_or(-1));
+                    let msg = match status.code() {
+                        Some(234) => "usually caused by a problematic stream in the source file",
+                        _ => "unknown"
+                    };
+                    error!("Command failed with status code {}: {}", status.code().unwrap_or(-1), msg);
                 }
             }
             Ok(())
