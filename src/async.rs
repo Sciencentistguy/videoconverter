@@ -14,9 +14,8 @@ use crate::{ARGS, Command, Result};
 
 pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
     let count = match ARGS.parallel {
-        None => 1,
-        Some(None) => num_cpus::get(),
-        Some(Some(x)) => {
+        None => num_cpus::get(),
+        Some(x) => {
             // ensure we don't create more processes than cores
             std::cmp::min(x, num_cpus::get())
         }

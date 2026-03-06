@@ -126,9 +126,9 @@ pub struct Args {
     #[clap(long = "statefile")]
     pub db_path: Option<PathBuf>,
 
-    /// Spawn each ffmpeg command concurrently.
+    /// Specify the number of jobs to create. Defaults to num_cpus
     #[clap(short, long, value_name = "CONCURRENCY_LIMIT")]
-    pub parallel: Option<Option<usize>>,
+    pub parallel: Option<usize>,
 
     /// Moves the `default_audio_stream`th audio stream with the given language code to the front, and marks it as
     /// default.
