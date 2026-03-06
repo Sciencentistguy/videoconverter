@@ -24,6 +24,7 @@ use colored::Colorize;
 use ffmpeg::ChannelLayout;
 use once_cell::sync::Lazy;
 use question::Answer;
+use regex::Regex;
 use tokio::runtime::Runtime;
 use tracing::*;
 use tracing_subscriber::EnvFilter;
@@ -33,6 +34,8 @@ use walkdir::WalkDir;
 use crate::{command::CommandError, directory::OutputDir, input::Stream, state::Db};
 
 static ARGS: Lazy<interface::Args> = Lazy::new(interface::Args::parse);
+static TV_INFORMATION_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"[sS](\d\d)\s*[eE](\d\d)").unwrap());
 
 const EXEMPT_FILE_EXTENSIONS: [&str; 12] = [
     "clbin", "gif", "jpg", "md", "nfo", "png", "py", "rar", "sfv", "srr", "txt", "srt",
@@ -141,7 +144,26 @@ fn main() -> Result<()> {
         .first()
         .and_then(|x| x.file_name().map(|y| y.to_string_lossy()));
 
-    let mut tv_options = TVOptions::from_cli(&db, title.as_deref());
+    let filename_information = entries
+        .iter()
+        .enumerate()
+        .filter_map(|(i, entry)| {
+            let c = TV_INFORMATION_REGEX.captures(entry.to_str()?)?;
+            let season = c
+                .get(1)?
+                .as_str()
+                .parse()
+                .expect("2 digits in a row should be parseable");
+            let episode = c
+                .get(2)?
+                .as_str()
+                .parse()
+                .expect("2 digits in a row should be parseable");
+            Some((i, (season, episode)))
+        })
+        .collect();
+
+    let mut tv_options = TVOptions::from_cli(&db, title.as_deref(), &filename_information);
     let rename_title = if tv_options.is_none() && entries.len() == 1 {
         let rename = util::confirm("Rename the file?", None);
         if rename {
@@ -204,20 +226,31 @@ fn main() -> Result<()> {
         ": will be overwritten".dimmed()
     );
 
-    for input_filepath in &entries {
-        let associated_subs = {
-            if let Some(v) = associated_subtitles.get(input_filepath.as_path()) {
-                v.as_slice()
-            } else {
-                &[]
-            }
-        };
+    for (i, input_filepath) in entries.iter().enumerate() {
+        let associated_subs = associated_subtitles
+            .get(input_filepath.as_path())
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
 
         let output_filename =
             command::generate_output_filename(input_filepath, &tv_options, rename_title.as_deref());
         let output_path = output_dir.0.join(output_filename);
 
         if let Some(ref mut tv_options) = tv_options {
+            if let Some((season, episode)) = filename_information.get(&i) {
+                if tv_options.episode != *episode {
+                    warn!(
+                        "Episode count mismatch detected! ({} != {})",
+                        tv_options.episode, episode
+                    );
+                }
+                if tv_options.season != *season {
+                    warn!(
+                        "Season number mismatch detected! ({} != {})",
+                        tv_options.episode, episode
+                    );
+                }
+            }
             tv_options.episode += 1;
         }
 
