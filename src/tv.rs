@@ -46,11 +46,14 @@ impl TVOptions {
                 .map(|(_, (_, x))| x)
                 .collect::<Vec<_>>();
             episodes.sort_unstable();
-            episodes
-                .iter()
-                .tuple_windows()
-                .all(|(a, b)| a.abs_diff(**b) == 1)
-                .then_some(episodes[0])
+            if episodes.is_empty() {
+                None
+            } else {
+                episodes
+                    .array_windows()
+                    .all(|[a, b]| a.abs_diff(**b) == 1)
+                    .then_some(episodes[0])
+            }
         };
 
         let mut using_db = false;
