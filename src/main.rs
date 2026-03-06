@@ -187,6 +187,16 @@ fn main() -> Result<()> {
 
     let mut errored_paths = Vec::new();
 
+    println!(
+        "{}{} {}{} {}{}",
+        "Green".green().dimmed(),
+        ": will be created".dimmed(),
+        "Red".red(),
+        ": cannot be created".dimmed(),
+        "Red".red().dimmed(),
+        ": will be overwritten".dimmed()
+    );
+
     for input_filepath in &entries {
         let associated_subs = {
             if let Some(v) = associated_subtitles.get(input_filepath.as_path()) {
@@ -225,16 +235,6 @@ fn main() -> Result<()> {
             error!("No video streams found");
             std::process::exit(1);
         }
-
-        println!(
-            "{}{} {}{} {}{}",
-            "Green".green().dimmed(),
-            ": will be created".dimmed(),
-            "Red".red(),
-            ": cannot be created".dimmed(),
-            "Red".red().dimmed(),
-            ": will be overwritten".dimmed()
-        );
 
         print!("Input file '{}' -> ", input_filepath.display());
 

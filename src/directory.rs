@@ -29,7 +29,6 @@ impl OutputDir {
         } else {
             let mut base_path =
                 std::env::current_dir().expect("Current working directory should exist");
-            dbg!(&base_path);
             base_path.push("newfiles");
             base_path
         })
