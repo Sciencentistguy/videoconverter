@@ -6,7 +6,10 @@
       url = "github:edolstra/flake-compat";
       flake = false;
     };
-    fenix.url = "github:nix-community/fenix";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
   outputs = {
     self,
