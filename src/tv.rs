@@ -50,8 +50,9 @@ impl TVOptions {
                 None
             } else {
                 episodes
-                    .array_windows()
-                    .all(|[a, b]| a.abs_diff(**b) == 1)
+                    .iter()
+                    .tuple_windows()
+                    .all(|(a, b)| a.abs_diff(**b) == 1)
                     .then_some(episodes[0])
             }
         };
