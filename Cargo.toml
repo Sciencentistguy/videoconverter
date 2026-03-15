@@ -25,7 +25,7 @@ serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.128"
 color-eyre = "0.6.3"
 num_cpus = "1.16.0"
-rusqlite = "0.38.0"
+rusqlite = "0.39.0"
 tap = "1.0.1"
 dirs = "6.0.0"
 indicatif = "0.18.3"
