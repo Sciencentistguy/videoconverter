@@ -10,7 +10,7 @@ impl OutputDir {
     pub fn new(tv_options: &Option<TVOptions>, rename_title: &Option<String>) -> Self {
         Self(if let Some(TVOptions { title, season, .. }) = tv_options {
             let mut path = ARGS
-                .output_prefix
+                .tv_output_prefix
                 .as_deref()
                 .map(|prefix| {
                     // prefix + tv title
@@ -22,7 +22,7 @@ impl OutputDir {
 
             path.push(format!("Season {:02}", season));
             path
-        } else if let Some(output_prefix) = ARGS.output_prefix.as_deref()
+        } else if let Some(output_prefix) = ARGS.movie_output_dir.as_deref()
             && rename_title.is_some()
         {
             output_prefix.to_owned()

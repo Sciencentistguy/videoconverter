@@ -165,7 +165,7 @@ fn main() -> Result<()> {
 
     let mut tv_options = TVOptions::from_cli(&db, title.as_deref(), &filename_information);
     let rename_title = if tv_options.is_none() && entries.len() == 1 {
-        let rename = util::confirm("Rename the file?", None);
+        let rename = util::confirm("Rename the file? (disables folder creation)", None);
         if rename {
             let mut title;
             Some(loop {

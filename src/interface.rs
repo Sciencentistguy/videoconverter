@@ -2,9 +2,9 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use clap::builder::ArgPredicate;
 use clap::Parser;
 use clap::ValueEnum;
-use clap::builder::ArgPredicate;
 use regex::Regex;
 
 const NNEDI_WEIGHTS_PATH: &str = "~/.ffmpeg/nnedi3_weights.bin";
@@ -103,8 +103,12 @@ pub struct Args {
     pub output_path: Option<PathBuf>,
 
     /// The directory prefix to insert tv shows to
-    #[clap(long, env = "VIDEOCONVERTER_OUTPUT_PREFIX")]
-    pub output_prefix: Option<PathBuf>,
+    #[clap(long, env = "VIDEOCONVERTER_TV_OUTPUT_PREFIX")]
+    pub tv_output_prefix: Option<PathBuf>,
+
+    /// The output directory for movies
+    #[clap(long, env = "VIDEOCONVERTER_MOVIE_OUTPUT_DIR")]
+    pub movie_output_dir: Option<PathBuf>,
 
     /// Enables renaming of files to TV show format
     #[clap(long, short = 'T')]
