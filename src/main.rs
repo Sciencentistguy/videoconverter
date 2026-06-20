@@ -217,13 +217,11 @@ fn main() -> Result<()> {
     let mut errored_paths = Vec::new();
 
     println!(
-        "{}{} {}{} {}{}",
+        "{}{} {}{}",
         "Green".green().dimmed().bold(),
-        ": will be created".dimmed(),
+        ": path does not exist".dimmed(),
         "Red".red(),
-        ": cannot be created".dimmed(),
-        "Dark Red".red().dimmed(),
-        ": will be overwritten".dimmed()
+        ": path althready exists".dimmed()
     );
 
     for (i, input_filepath) in entries.iter().enumerate() {
@@ -447,17 +445,7 @@ fn print_path_colourised(output_path: &Path) {
         print!("/{}", path_segment);
     }
     let output_name = if output_path.exists() {
-        if ARGS.overwrite {
-            output_path
-                .file_name()
-                .unwrap()
-                .display()
-                .to_string()
-                .red()
-                .dimmed()
-        } else {
-            output_path.file_name().unwrap().display().to_string().red()
-        }
+        output_path.file_name().unwrap().display().to_string().red()
     } else {
         output_path
             .file_name()
