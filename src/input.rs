@@ -390,12 +390,12 @@ fn is_pcm(x: codec::Id) -> bool {
 fn is_lossless(x: &Audio) -> bool {
     use codec::Id::*;
     is_pcm(x.codec)
-        || matches!(x.codec,
-        TRUEHD |
-        DTS if matches!(
-            x.profile,
-            Some(codec::Profile::DTS(codec::profile::DTS::HD_MA))
-        ))
+        || x.codec == TRUEHD
+        || (x.codec == DTS
+            && matches!(
+                x.profile,
+                Some(codec::Profile::DTS(codec::profile::DTS::HD_MA))
+            ))
 }
 
 pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Option<codec::Id>> {
