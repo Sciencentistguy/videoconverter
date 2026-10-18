@@ -284,7 +284,7 @@ fn main() -> Result<()> {
         for stream in mappings.iter() {
             let file = stream.file();
             let index = stream.index();
-            let codec = codecs.get(&index).unwrap();
+            let codec = codecs.get(&(file, index)).unwrap();
             let oldcodec = stream.codec();
             let newcodec = match codec {
                 None => &oldcodec,

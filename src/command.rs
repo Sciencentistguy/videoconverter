@@ -81,7 +81,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     associated_subs: &[PathBuf],
     output_path: P,
     mut mappings: StreamMappings,
-    target_codecs: HashMap<usize, Option<codec::Id>>,
+    target_codecs: HashMap<(usize, usize), Option<codec::Id>>,
 ) -> Result<Command, CommandError> {
     let mut command = Command::new(&ARGS.ffmpeg_path);
     command.arg("-hide_banner"); // Remove gpl banner
@@ -120,14 +120,14 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     // - The video codec is not the same as the target codec
     // - `--deinterlace` is passed
     // - `--force-reencode` is passed
-    let reencoding_video = target_codecs[&video_stream.index].is_some()
+    let reencoding_video = target_codecs[&(video_stream.file, video_stream.index)].is_some()
         || ARGS.force_deinterlace
         || ARGS.reencode_video;
 
     let reencoding_audio = mappings
         .audio
         .iter()
-        .map(|x| x.index())
+        .map(|x| (x.file(), x.index()))
         .any(|x| target_codecs[&x].is_some());
 
     if reencoding_video && !ARGS.no_hwaccel {
@@ -201,12 +201,16 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     command.args(["-max_muxing_queue_size", "16384"]);
 
     let generate_codec_args =
-        |command: &mut Command, stream_type: char, index_in: usize, index_out: usize| {
-            let codec = target_codecs[&index_in];
+        |command: &mut Command, stream_type: char, key: (usize, usize), index_out: usize| {
+            let codec = target_codecs[&key];
             command.arg(format!("-c:{}:{}", stream_type, index_out));
             if let Some(&codec) = codec.as_ref() {
                 command.arg(codec.get_encoder());
-            } else if mappings.video.iter().map(|x| x.index()).contains(&index_in)
+            } else if mappings
+                .video
+                .iter()
+                .map(|x| (x.file(), x.index()))
+                .contains(&key)
                 && ARGS.reencode_video
             {
                 let encoder = match ARGS.encoder {
@@ -221,7 +225,12 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         };
 
     for (out_index, stream) in mappings.video.iter().enumerate() {
-        generate_codec_args(&mut command, 'v', stream.index(), out_index);
+        generate_codec_args(
+            &mut command,
+            'v',
+            (stream.file(), stream.index()),
+            out_index,
+        );
     }
 
     const NVENC_FLAGS: &[&str] = &["-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"];
@@ -294,7 +303,12 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     }
 
     for (out_index, stream) in mappings.audio.iter().enumerate() {
-        generate_codec_args(&mut command, 'a', stream.index(), out_index);
+        generate_codec_args(
+            &mut command,
+            'a',
+            (stream.file(), stream.index()),
+            out_index,
+        );
     }
 
     if reencoding_audio && target_codecs.values().contains(&Some(codec::Id::AAC)) {
@@ -303,7 +317,12 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     }
 
     for (out_index, stream) in mappings.subtitle.iter().enumerate() {
-        generate_codec_args(&mut command, 's', stream.index(), out_index);
+        generate_codec_args(
+            &mut command,
+            's',
+            (stream.file(), stream.index()),
+            out_index,
+        );
     }
 
     if let Some(lang) = ARGS.default_audio_language.as_deref() {

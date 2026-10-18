@@ -398,13 +398,15 @@ fn is_lossless(x: &Audio) -> bool {
             ))
 }
 
-pub fn get_codec_mapping(stream_mappings: &StreamMappings) -> HashMap<usize, Option<codec::Id>> {
+pub fn get_codec_mapping(
+    stream_mappings: &StreamMappings,
+) -> HashMap<(usize, usize), Option<codec::Id>> {
     use codec::Id::{AAC, DVD_SUBTITLE, FLAC, H264, HDMV_PGS_SUBTITLE, HEVC, MOV_TEXT, SSA};
 
     stream_mappings
         .iter()
         .map(|stream| {
-            let index = stream.index();
+            let index = (stream.file(), stream.index());
             match stream {
                 Stream::Video(video) if !ARGS.copy_video => match video.codec {
                     HEVC | H264 if !ARGS.reencode_video => (index, None),
