@@ -245,7 +245,7 @@ fn main() -> Result<()> {
                 if tv_options.season != *season {
                     warn!(
                         "Season number mismatch detected! ({} != {})",
-                        tv_options.episode, episode
+                        tv_options.season, season
                     );
                 }
             }
