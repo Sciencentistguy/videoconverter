@@ -398,7 +398,7 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    if ARGS.yes || !util::confirm("Continue?", Some(Answer::YES)) {
+    if !ARGS.yes && !util::confirm("Continue?", Some(Answer::YES)) {
         eprintln!("Aborting");
         return Ok(());
     }
