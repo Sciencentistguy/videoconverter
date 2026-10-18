@@ -7,6 +7,7 @@ use crate::interface::AudioReencodeType;
 use crate::interface::StreamRef;
 use crate::interface::VideoEncoder;
 
+use color_eyre::eyre::{Result, WrapErr};
 use ffmpeg::ChannelLayout;
 pub use ffmpeg::codec;
 pub use ffmpeg::codec::Context;
@@ -142,10 +143,13 @@ impl Stream {
         codec_parameters: Parameters,
         tags: ffmpeg::DictionaryRef,
         disposition: Disposition,
-    ) -> Stream {
+    ) -> Result<Stream> {
         let codec = codec_parameters.id();
         let lang = tags.get("language").map(|f| f.to_string());
-        let decoder = codec_context.decoder().audio().unwrap();
+        let decoder = codec_context
+            .decoder()
+            .audio()
+            .wrap_err("Failed to open audio decoder")?;
         let channel_layout = decoder.channel_layout().to_owned();
         let channels = channel_layout.channels();
         let profile = match decoder.profile() {
@@ -154,18 +158,9 @@ impl Stream {
         };
         let is_forced = disposition.contains(Disposition::FORCED);
         let original_title = tags.get("title").map(|x| x.to_string());
-        let title = if original_title.is_none() || ARGS.normalize_titles {
-            let lang_full = lang.as_deref().map(get_full_langname).unwrap_or("Unknown");
-            let mut title = lang_full.to_string();
-            if is_forced {
-                title.push_str(" [Forced]");
-            }
-            title
-        } else {
-            original_title.as_ref().unwrap().to_string()
-        };
+        let title = stream_title(original_title.as_deref(), lang.as_deref(), is_forced);
 
-        Self::Audio(Audio {
+        Ok(Self::Audio(Audio {
             file,
             index,
             codec,
@@ -176,7 +171,7 @@ impl Stream {
             original_title,
             title,
             is_forced,
-        })
+        }))
     }
 
     fn subtitle(
@@ -190,16 +185,7 @@ impl Stream {
         let lang = tags.get("language").map(|f| f.to_string());
         let is_forced = disposition.contains(Disposition::FORCED);
         let original_title = tags.get("title").map(|x| x.to_string());
-        let title = if original_title.is_none() || ARGS.normalize_titles {
-            let lang_full = lang.as_deref().map(get_full_langname).unwrap_or("Unknown");
-            let mut title = lang_full.to_string();
-            if is_forced {
-                title.push_str(" [Forced]");
-            }
-            title
-        } else {
-            original_title.as_ref().unwrap().to_string()
-        };
+        let title = stream_title(original_title.as_deref(), lang.as_deref(), is_forced);
 
         Self::Subtitle(Subtitle {
             file,
@@ -245,24 +231,30 @@ impl StreamMappings {
     }
 }
 
-pub fn parse_stream_metadata(file: Input, fileno: usize) -> Vec<Stream> {
+pub fn parse_stream_metadata(file: Input, fileno: usize) -> Result<Vec<Stream>> {
     file.streams()
-        .filter_map(|stream| {
+        .filter_map(|stream| -> Option<Result<Stream>> {
             let index = stream.index();
             let codec_parameters = stream.parameters();
             let codec_context =
-                ffmpeg::codec::context::Context::from_parameters(codec_parameters.clone()).unwrap();
-            // let codec_context = stream.codec();
+                match ffmpeg::codec::context::Context::from_parameters(codec_parameters.clone()) {
+                    Ok(context) => context,
+                    Err(err) => {
+                        return Some(Err(err).wrap_err_with(|| {
+                            format!("Failed to read parameters of stream {index}")
+                        }));
+                    }
+                };
             let tags = stream.metadata();
             let disposition = stream.disposition();
 
             match codec_context.medium() {
-                Type::Video => Some(Stream::video(
+                Type::Video => Some(Ok(Stream::video(
                     fileno,
                     index,
                     codec_context,
                     codec_parameters,
-                )),
+                ))),
                 Type::Audio => Some(Stream::audio(
                     fileno,
                     index,
@@ -271,13 +263,13 @@ pub fn parse_stream_metadata(file: Input, fileno: usize) -> Vec<Stream> {
                     tags,
                     disposition,
                 )),
-                Type::Subtitle => Some(Stream::subtitle(
+                Type::Subtitle => Some(Ok(Stream::subtitle(
                     fileno,
                     index,
                     codec_parameters,
                     tags,
                     disposition,
-                )),
+                ))),
                 _ => None,
             }
         })
@@ -442,13 +434,28 @@ pub fn get_codec_mapping(
         .collect()
 }
 
-pub fn length(input_filepath: impl AsRef<Path>) -> Duration {
-    let ictx = ffmpeg::format::input(&input_filepath).unwrap();
+pub fn length(input_filepath: impl AsRef<Path>) -> Result<Duration> {
+    let input_filepath = input_filepath.as_ref();
+    let ictx = ffmpeg::format::input(input_filepath)
+        .wrap_err_with(|| format!("Filepath: {}", input_filepath.display()))?;
     let duration = ictx.duration();
-    if duration > 0 {
+    Ok(if duration > 0 {
         Duration::from_micros(duration as u64)
     } else {
         Duration::ZERO
+    })
+}
+
+fn stream_title(original_title: Option<&str>, lang: Option<&str>, is_forced: bool) -> String {
+    match original_title {
+        Some(original_title) if !ARGS.normalize_titles => original_title.to_owned(),
+        _ => {
+            let mut title = lang.map(get_full_langname).unwrap_or("Unknown").to_owned();
+            if is_forced {
+                title.push_str(" [Forced]");
+            }
+            title
+        }
     }
 }
 

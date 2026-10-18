@@ -1,17 +1,20 @@
+use color_eyre::eyre::{Result, eyre};
 use question::{Answer, Question};
 
-pub fn prompt(prompt: &str) -> String {
+pub fn prompt(prompt: &str) -> Result<String> {
     loop {
         match Question::new(prompt).ask() {
             Some(Answer::RESPONSE(s)) if s.is_empty() => continue,
-            Some(Answer::RESPONSE(s)) => break s,
-            Some(_) => unreachable!("Not a yes/no question"),
-            _ => unreachable!("Question::ask() should never return None"),
+            Some(Answer::RESPONSE(s)) => break Ok(s),
+            Some(answer) => {
+                break Err(eyre!("Unexpected answer to a free-text prompt: {answer:?}"));
+            }
+            None => break Err(eyre!("Failed to read a response to '{prompt}'")),
         }
     }
 }
 
-pub fn confirm(prompt: &str, default: Option<question::Answer>) -> bool {
+pub fn confirm(prompt: &str, default: Option<question::Answer>) -> Result<bool> {
     let mut question = Question::new(prompt);
     question.yes_no().show_defaults();
 
@@ -22,8 +25,10 @@ pub fn confirm(prompt: &str, default: Option<question::Answer>) -> bool {
     }
 
     match question.confirm() {
-        Answer::YES => true,
-        Answer::NO => false,
-        Answer::RESPONSE(x) => unreachable!("Yes/No Question shouldn't return RESPONSE: `{x}`"),
+        Answer::YES => Ok(true),
+        Answer::NO => Ok(false),
+        Answer::RESPONSE(x) => Err(eyre!(
+            "Unexpected answer to a yes/no prompt '{prompt}': `{x}`"
+        )),
     }
 }

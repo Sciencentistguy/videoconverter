@@ -11,6 +11,7 @@ use crate::interface::VideoEncoder;
 use crate::tv::TVOptions;
 use crate::util;
 
+use color_eyre::eyre::{Result, eyre};
 use ffmpeg::codec;
 use itertools::Itertools;
 use question::Answer;
@@ -22,9 +23,9 @@ pub fn generate_output_filename<P: AsRef<Path>>(
     path: P,
     tv_options: &Option<TVOptions>,
     rename_title: Option<&str>,
-) -> String {
+) -> Result<String> {
     let path = path.as_ref();
-    if let Some(tv_options) = tv_options {
+    Ok(if let Some(tv_options) = tv_options {
         format!(
             "{} - s{:02}e{:02}.mkv",
             tv_options.title, tv_options.season, tv_options.episode
@@ -36,43 +37,37 @@ pub fn generate_output_filename<P: AsRef<Path>>(
             }
         })
     } else {
-        path.with_extension("mkv")
+        let mkv_path = path.with_extension("mkv");
+        mkv_path
             .file_name()
-            .expect("input_filepath should have a filename")
+            .ok_or_else(|| eyre!("Input path '{}' has no filename", path.display()))?
             .to_str()
-            .unwrap()
+            .ok_or_else(|| eyre!("Input filename '{}' is not valid UTF-8", path.display()))?
             .to_owned()
-    }
+    })
 }
 
 trait GetEncoderExt {
-    fn get_encoder(&self) -> &'static str;
+    fn get_encoder(&self) -> Result<&'static str>;
 }
 
 impl GetEncoderExt for codec::Id {
-    fn get_encoder(&self) -> &'static str {
+    fn get_encoder(&self) -> Result<&'static str> {
         use codec::Id;
-        match self {
+        Ok(match self {
             Id::AAC => "libfdk_aac",
             Id::FLAC => "flac",
             Id::H264 => "libx264",
             Id::HEVC => match ARGS.encoder {
                 VideoEncoder::Libx264 => {
-                    error!("Internal error: HEVC is not supported with libx264");
-                    unreachable!();
+                    return Err(eyre!("HEVC is not supported with libx264"));
                 }
                 VideoEncoder::Libx265 => "libx265",
                 VideoEncoder::Nvenc => "hevc_nvenc",
             },
             Id::SSA => "ass",
-            _ => {
-                error!(
-                    codec=?self,
-                    "Internal error: Unexpected output codec passed to get_encoder."
-                );
-                unreachable!();
-            }
-        }
+            _ => return Err(eyre!("No encoder known for output codec {self:?}")),
+        })
     }
 }
 
@@ -82,7 +77,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     output_path: P,
     mut mappings: StreamMappings,
     target_codecs: HashMap<(usize, usize), Option<codec::Id>>,
-) -> Result<Command, CommandError> {
+) -> std::result::Result<Command, CommandError> {
     let mut command = Command::new(&ARGS.ffmpeg_path);
     command.arg("-hide_banner"); // Remove gpl banner
 
@@ -94,7 +89,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
                     output_path.as_ref().display()
                 ),
                 Some(Answer::YES),
-            )
+            )?
         {
             warn!(file = ?output_path.as_ref().to_string_lossy(),
                 "Output file already exists. Overwriting"
@@ -110,25 +105,25 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
 
     let video_stream = match mappings.video.first() {
         Some(Stream::Video(x)) => x,
-        _ => {
-            error!("Input file does not contain a video stream.");
-            std::process::exit(1);
-        }
+        _ => return Err(CommandError::NoVideoStream),
     };
 
     // Reencode video if:
     // - The video codec is not the same as the target codec
     // - `--deinterlace` is passed
     // - `--force-reencode` is passed
-    let reencoding_video = target_codecs[&(video_stream.file, video_stream.index)].is_some()
+    let reencoding_video = target_codec(&target_codecs, (video_stream.file, video_stream.index))?
+        .is_some()
         || ARGS.force_deinterlace
         || ARGS.reencode_video;
 
-    let reencoding_audio = mappings
-        .audio
-        .iter()
-        .map(|x| (x.file(), x.index()))
-        .any(|x| target_codecs[&x].is_some());
+    let mut reencoding_audio = false;
+    for stream in &mappings.audio {
+        if target_codec(&target_codecs, (stream.file(), stream.index()))?.is_some() {
+            reencoding_audio = true;
+            break;
+        }
+    }
 
     if reencoding_video && !ARGS.no_hwaccel {
         use codec::Id;
@@ -250,29 +245,33 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         }
     }
 
-    let generate_codec_args =
-        |command: &mut Command, stream_type: char, key: (usize, usize), index_out: usize| {
-            let codec = target_codecs[&key];
-            command.arg(format!("-c:{}:{}", stream_type, index_out));
-            if let Some(&codec) = codec.as_ref() {
-                command.arg(codec.get_encoder());
-            } else if mappings
-                .video
-                .iter()
-                .map(|x| (x.file(), x.index()))
-                .contains(&key)
-                && ARGS.reencode_video
-            {
-                let encoder = match ARGS.encoder {
-                    VideoEncoder::Libx264 => "libx264",
-                    VideoEncoder::Libx265 => "libx265",
-                    VideoEncoder::Nvenc => "hevc_nvenc",
-                };
-                command.arg(encoder);
-            } else {
-                command.arg("copy");
-            }
-        };
+    let generate_codec_args = |command: &mut Command,
+                               stream_type: char,
+                               key: (usize, usize),
+                               index_out: usize|
+     -> Result<()> {
+        let codec = target_codec(&target_codecs, key)?;
+        command.arg(format!("-c:{}:{}", stream_type, index_out));
+        if let Some(&codec) = codec.as_ref() {
+            command.arg(codec.get_encoder()?);
+        } else if mappings
+            .video
+            .iter()
+            .map(|x| (x.file(), x.index()))
+            .contains(&key)
+            && ARGS.reencode_video
+        {
+            let encoder = match ARGS.encoder {
+                VideoEncoder::Libx264 => "libx264",
+                VideoEncoder::Libx265 => "libx265",
+                VideoEncoder::Nvenc => "hevc_nvenc",
+            };
+            command.arg(encoder);
+        } else {
+            command.arg("copy");
+        }
+        Ok(())
+    };
 
     for (out_index, stream) in mappings.video.iter().enumerate() {
         generate_codec_args(
@@ -280,7 +279,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             'v',
             (stream.file(), stream.index()),
             out_index,
-        );
+        )?;
     }
 
     const NVENC_FLAGS: &[&str] = &["-profile:v", "main", "-b:v", "0", "-rc-lookahead", "32"];
@@ -358,7 +357,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             'a',
             (stream.file(), stream.index()),
             out_index,
-        );
+        )?;
     }
 
     if reencoding_audio && target_codecs.values().contains(&Some(codec::Id::AAC)) {
@@ -372,7 +371,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
             's',
             (stream.file(), stream.index()),
             out_index,
-        );
+        )?;
     }
 
     if default_audio_set {
@@ -423,14 +422,22 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     }
 
     // Ensure all streams have titles
-    for (i, sub_stream) in mappings.subtitle.iter().enumerate() {
-        let sub_stream = sub_stream.as_subtitle().unwrap();
+    for (i, sub_stream) in mappings
+        .subtitle
+        .iter()
+        .filter_map(Stream::as_subtitle)
+        .enumerate()
+    {
         command.arg(format!("-metadata:s:s:{i}"));
         command.arg(format!("title={}", sub_stream.title));
     }
 
-    for (i, audio_stream) in mappings.audio.iter().enumerate() {
-        let audio_stream = audio_stream.as_audio().unwrap();
+    for (i, audio_stream) in mappings
+        .audio
+        .iter()
+        .filter_map(Stream::as_audio)
+        .enumerate()
+    {
         command.arg(format!("-metadata:s:a:{i}"));
         command.arg(format!("title={}", audio_stream.title));
     }
@@ -440,7 +447,22 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     Ok(command)
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum CommandError {
+    #[error("output file already exists")]
     FileExists,
+    #[error("input file does not contain a video stream")]
+    NoVideoStream,
+    #[error(transparent)]
+    Other(#[from] color_eyre::Report),
+}
+
+fn target_codec(
+    target_codecs: &HashMap<(usize, usize), Option<codec::Id>>,
+    (file, index): (usize, usize),
+) -> Result<Option<codec::Id>> {
+    target_codecs
+        .get(&(file, index))
+        .copied()
+        .ok_or_else(|| eyre!("No codec mapping for stream {file}:{index}"))
 }

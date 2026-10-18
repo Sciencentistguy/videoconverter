@@ -34,8 +34,7 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
         overall_pb.set_style(
             ProgressStyle::with_template(
                 "[{elapsed}] Overall Progress: {wide_bar:.cyan/blue} ({pos}/{len})",
-            )
-            .unwrap()
+            )?
             .progress_chars("=>-"),
         );
         overall_pb.enable_steady_tick(Duration::from_secs(1));
@@ -77,7 +76,10 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
 
                 js.spawn(async move {
                     let mut handle = handle;
-                    let stdout = handle.stdout.take().unwrap();
+                    let stdout = handle
+                        .stdout
+                        .take()
+                        .ok_or_else(|| eyre!("ffmpeg stdout was not captured"))?;
                     let reader = BufReader::new(stdout);
                     let mut lines = reader.lines();
 
@@ -91,14 +93,13 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
                     pb.set_style(
                         ProgressStyle::with_template(
                             "[{elapsed}] {msg} {wide_bar:.cyan/blue} {percent_precise:>6}% (eta: {eta})",
-                        )
-                        .unwrap()
+                        )?
                         .progress_chars("=>-"),
                     );
                     pb.set_message(
                         filename
                             .file_name()
-                            .expect("Output should always have a name")
+                            .ok_or_else(|| eyre!("Output path has no filename"))?
                             .to_string_lossy()
                             .to_string(),
                     );

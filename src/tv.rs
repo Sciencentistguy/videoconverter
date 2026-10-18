@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use color_eyre::eyre::{OptionExt, Result};
 use itertools::Itertools;
 use question::Answer;
 use serde::{Deserialize, Serialize};
@@ -19,18 +20,23 @@ impl TVOptions {
         db: &Db,
         title: Option<&str>,
         filename_information: &HashMap<usize, (u32, u32)>,
-    ) -> Option<Self> {
+    ) -> Result<Option<Self>> {
         if ARGS.tv_mode {
             trace!("TV Mode enabled via args");
-            return Some(TVOptions {
-                title: ARGS.title.clone().unwrap(),
-                season: ARGS.season.unwrap(),
-                episode: ARGS.episode.unwrap(),
-            });
+            return Ok(Some(TVOptions {
+                title: ARGS
+                    .title
+                    .clone()
+                    .ok_or_eyre("--title is required in TV mode")?,
+                season: ARGS.season.ok_or_eyre("--season is required in TV mode")?,
+                episode: ARGS
+                    .episode
+                    .ok_or_eyre("--episode is required in TV mode")?,
+            }));
         }
 
-        if !util::confirm("TV Show Mode", Some(Answer::NO)) {
-            return None;
+        if !util::confirm("TV Show Mode", Some(Answer::NO))? {
+            return Ok(None);
         }
 
         let detected_season = (|| {
@@ -72,17 +78,12 @@ impl TVOptions {
                 && util::confirm(
                     &format!("Use guessed title? ({guessed_title})"),
                     Some(Answer::YES),
-                )
+                )?
             {
                 using_db = true;
                 guessed_title
             } else {
-                loop {
-                    let response = util::prompt("Please enter the title of the TV show:");
-                    if !response.is_empty() {
-                        break response;
-                    }
-                }
+                util::prompt("Please enter the title of the TV show:")?
             }
         };
 
@@ -90,13 +91,13 @@ impl TVOptions {
 
         let season = 'a: {
             if let Some(&detected_season) = detected_season
-                && util::confirm(&format!("Use detected season? ({})", detected_season), None)
+                && util::confirm(&format!("Use detected season? ({})", detected_season), None)?
             {
                 break 'a detected_season;
             }
             if let Some(previous_season) = previous_season {
                 let use_old_value = using_db
-                    && util::confirm(&format!("Use previous season? ({})", previous_season), None);
+                    && util::confirm(&format!("Use previous season? ({})", previous_season), None)?;
 
                 if use_old_value {
                     break 'a previous_season;
@@ -106,7 +107,7 @@ impl TVOptions {
             }
 
             loop {
-                match util::prompt("Enter the season index of the TV show:").parse::<u32>() {
+                match util::prompt("Enter the season index of the TV show:")?.parse::<u32>() {
                     Ok(x) => break 'a x,
                     Err(_) => {
                         println!("Invalid response. Please try again.");
@@ -120,7 +121,7 @@ impl TVOptions {
                 && util::confirm(
                     &format!("Use detected first episode? ({})", detected_first_episode),
                     None,
-                )
+                )?
             {
                 break 'b *detected_first_episode;
             };
@@ -135,16 +136,16 @@ impl TVOptions {
                 } else {
                     "Enter the index of the first episode in this directory:".to_string()
                 };
-                if let Ok(x) = util::prompt(&prompt).parse::<u32>() {
+                if let Ok(x) = util::prompt(&prompt)?.parse::<u32>() {
                     break 'b x;
                 }
             }
         };
 
-        Some(TVOptions {
+        Ok(Some(TVOptions {
             title,
             season,
             episode,
-        })
+        }))
     }
 }

@@ -50,7 +50,7 @@ fn main() -> Result<()> {
         .with_env_filter(EnvFilter::from_default_env())
         .init();
 
-    ARGS.validate();
+    ARGS.validate()?;
 
     debug!(?ARGS);
 
@@ -102,7 +102,11 @@ fn main() -> Result<()> {
                     .map(|x| x.path().to_owned())
                     .filter(|x| x.is_file())
                     .filter(
-                        |path| !path.file_name().unwrap(/* all files have names */).as_bytes().starts_with(b"."), // Remove files that have no filename (?)
+                        |path| {
+                            // Remove hidden files, and files that have no filename
+                            path.file_name()
+                                .is_some_and(|name| !name.as_bytes().starts_with(b"."))
+                        }
                     )
                     .filter(|path| {
                         // Remove files with extensions that are exempt
@@ -132,8 +136,10 @@ fn main() -> Result<()> {
 
                 entries.extend(it);
             } else {
-                error!("Provided path must be either a file or a directory");
-                std::process::exit(1);
+                return Err(eyre!(
+                    "Provided path '{}' must be either a file or a directory",
+                    path.display()
+                ));
             };
         }
         entries.sort_unstable_by(|a, b| a.file_name().cmp(&b.file_name()));
@@ -149,31 +155,17 @@ fn main() -> Result<()> {
         .enumerate()
         .filter_map(|(i, entry)| {
             let c = TV_INFORMATION_REGEX.captures(entry.to_str()?)?;
-            let season = c
-                .get(1)?
-                .as_str()
-                .parse()
-                .expect("2 digits in a row should be parseable");
-            let episode = c
-                .get(2)?
-                .as_str()
-                .parse()
-                .expect("2 digits in a row should be parseable");
+            let season = c.get(1)?.as_str().parse().ok()?;
+            let episode = c.get(2)?.as_str().parse().ok()?;
             Some((i, (season, episode)))
         })
         .collect();
 
-    let mut tv_options = TVOptions::from_cli(&db, title.as_deref(), &filename_information);
+    let mut tv_options = TVOptions::from_cli(&db, title.as_deref(), &filename_information)?;
     let rename_title = if tv_options.is_none() && entries.len() == 1 {
-        let rename = util::confirm("Rename the file? (disables folder creation)", None);
+        let rename = util::confirm("Rename the file? (disables folder creation)", None)?;
         if rename {
-            let mut title;
-            Some(loop {
-                title = util::prompt("Title to rename to:");
-                if !title.is_empty() {
-                    break title;
-                }
-            })
+            Some(util::prompt("Title to rename to:")?)
         } else {
             None
         }
@@ -192,14 +184,19 @@ fn main() -> Result<()> {
     let mut associated_subtitles: HashMap<&Path, Vec<PathBuf>> = HashMap::new();
 
     for path in &entries {
-        let videofile_name = path.file_stem().unwrap().to_string_lossy();
+        let videofile_name = path
+            .file_stem()
+            .ok_or_else(|| eyre!("Input path '{}' has no filename", path.display()))?
+            .to_string_lossy();
         let dir = path.parent().ok_or_else(|| eyre!("Shouldn't be /"))?;
         for child in std::fs::read_dir(dir)? {
             let child = child?.path();
             if child.is_dir() {
                 continue;
             }
-            let name = child.file_stem().unwrap().to_string_lossy();
+            let Some(name) = child.file_stem().map(|stem| stem.to_string_lossy()) else {
+                continue;
+            };
             if name.starts_with(&*videofile_name)
                 && let Some(ext) = child.extension().map(|x| x.to_string_lossy())
                 && SUBTITLE_EXTS.contains(&&*ext.to_lowercase())
@@ -212,7 +209,7 @@ fn main() -> Result<()> {
 
     let mut commands = Vec::with_capacity(entries.len());
 
-    let output_dir = OutputDir::new(&tv_options, &rename_title);
+    let output_dir = OutputDir::new(&tv_options, &rename_title)?;
 
     let mut errored_paths = Vec::new();
 
@@ -230,8 +227,11 @@ fn main() -> Result<()> {
             .map(|v| v.as_slice())
             .unwrap_or(&[]);
 
-        let output_filename =
-            command::generate_output_filename(input_filepath, &tv_options, rename_title.as_deref());
+        let output_filename = command::generate_output_filename(
+            input_filepath,
+            &tv_options,
+            rename_title.as_deref(),
+        )?;
         let output_path = output_dir.0.join(output_filename);
 
         if let Some(ref mut tv_options) = tv_options {
@@ -255,12 +255,12 @@ fn main() -> Result<()> {
         let file = ffmpeg::format::input(&input_filepath)
             .wrap_err_with(|| format!("Filepath: {}", input_filepath.display()))?;
 
-        let mut parsed = input::parse_stream_metadata(file, 0);
+        let mut parsed = input::parse_stream_metadata(file, 0)?;
 
         for (i, path) in associated_subs.iter().enumerate() {
             let file = ffmpeg::format::input(path)
                 .wrap_err_with(|| format!("Filepath: {}", path.display()))?;
-            parsed.extend_from_slice(&input::parse_stream_metadata(file, i + 1));
+            parsed.extend_from_slice(&input::parse_stream_metadata(file, i + 1)?);
         }
 
         let stream_mappings = input::get_stream_mappings(&parsed);
@@ -270,8 +270,10 @@ fn main() -> Result<()> {
         let codecs = &codec_mappings;
 
         if mappings.video.is_empty() {
-            error!("No video streams found");
-            std::process::exit(1);
+            return Err(eyre!(
+                "No video streams found in '{}'",
+                input_filepath.display()
+            ));
         }
 
         print!("Input file '{}' -> ", input_filepath.display());
@@ -284,7 +286,9 @@ fn main() -> Result<()> {
         for stream in mappings.iter() {
             let file = stream.file();
             let index = stream.index();
-            let codec = codecs.get(&(file, index)).unwrap();
+            let codec = codecs
+                .get(&(file, index))
+                .ok_or_else(|| eyre!("No codec mapping for stream {file}:{index}"))?;
             let oldcodec = stream.codec();
             let newcodec = match codec {
                 None => &oldcodec,
@@ -356,7 +360,7 @@ fn main() -> Result<()> {
             stream_mappings,
             codec_mappings,
         );
-        let length = input::length(input_filepath);
+        let length = input::length(input_filepath)?;
 
         info!(?command);
         match command {
@@ -367,11 +371,15 @@ fn main() -> Result<()> {
             }),
             Err(CommandError::FileExists) => {
                 if !ARGS.continue_processing {
-                    std::process::exit(1);
+                    return Err(eyre!(
+                        "Output file '{}' already exists",
+                        output_path.display()
+                    ));
                 }
                 errored_paths.push(input_filepath);
                 continue;
             }
+            Err(err) => return Err(err.into()),
         }
     }
 
@@ -398,12 +406,17 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    if !ARGS.yes && !util::confirm("Continue?", Some(Answer::YES)) {
+    if !ARGS.yes && !util::confirm("Continue?", Some(Answer::YES))? {
         eprintln!("Aborting");
         return Ok(());
     }
 
-    output_dir.create().unwrap();
+    output_dir.create().wrap_err_with(|| {
+        format!(
+            "Failed to create output directory '{}'",
+            output_dir.0.display()
+        )
+    })?;
 
     let rt = Runtime::new()?;
     rt.block_on(r#async::run_commands(commands))?;
@@ -425,14 +438,13 @@ struct Command {
 }
 
 fn print_path_colourised(output_path: &Path) {
-    for path_element in output_path.ancestors().skip(1).collect::<Vec<_>>()
-        [..output_path.ancestors().skip(1).collect::<Vec<_>>().len() - 1]
-        .iter()
-        .rev()
-    {
-        // We skip "/" as we do that in the format call, meaning every `path_element` will have
-        // a name
-        let path_segment = path_element.file_name().unwrap().display().to_string();
+    let ancestors = output_path.ancestors().skip(1).collect::<Vec<_>>();
+    // The root has no file name, so it is skipped here and printed as the leading `/`
+    for path_element in ancestors.iter().rev() {
+        let Some(name) = path_element.file_name() else {
+            continue;
+        };
+        let path_segment = name.display().to_string();
         let path_segment = if path_element.exists() {
             if !path_element.is_dir() {
                 path_segment.bold().red()
@@ -444,17 +456,14 @@ fn print_path_colourised(output_path: &Path) {
         };
         print!("/{}", path_segment);
     }
+    let output_name = output_path
+        .file_name()
+        .map(|name| name.display().to_string())
+        .unwrap_or_default();
     let output_name = if output_path.exists() {
-        output_path.file_name().unwrap().display().to_string().red()
+        output_name.red()
     } else {
-        output_path
-            .file_name()
-            .unwrap()
-            .display()
-            .to_string()
-            .green()
-            .bold()
-            .dimmed()
+        output_name.green().bold().dimmed()
     };
     println!("/{}", output_name);
 }

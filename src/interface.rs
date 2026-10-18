@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use clap::Parser;
 use clap::ValueEnum;
+use color_eyre::eyre::{Result, eyre};
 use clap::builder::ArgPredicate;
 use regex::Regex;
 
@@ -223,17 +224,18 @@ pub struct Args {
 }
 
 impl Args {
-    pub fn validate(&self) {
+    pub fn validate(&self) -> Result<()> {
         if matches!(self.encoder, VideoEncoder::Nvenc) {
             if self.no_hwaccel {
-                eprintln!("Hardware acceleration cannot be disabled when using nvenc");
-                std::process::exit(1);
+                return Err(eyre!(
+                    "Hardware acceleration cannot be disabled when using nvenc"
+                ));
             }
             if self.tune.is_some() {
-                eprintln!("Libx264 tunes cannot be used with nvenc.");
-                std::process::exit(1);
+                return Err(eyre!("Libx264 tunes cannot be used with nvenc."));
             }
         }
+        Ok(())
     }
 }
 
@@ -268,7 +270,7 @@ impl FromStr for CropFilter {
         let parse = |i| {
             capts
                 .get(i)
-                .unwrap()
+                .ok_or("Crop filter is missing a value")?
                 .as_str()
                 .parse::<u32>()
                 .map_err(|_| "Crop values must fit in a 32-bit integer")
