@@ -272,7 +272,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
 
         // Whether to deinterlace the video.
         let deinterlace = matches!(video_stream.field_order, FieldOrder::Interlaced)
-            && ARGS.no_deinterlace
+            && !ARGS.no_deinterlace
             || ARGS.force_deinterlace;
 
         // Using an array instead of 2 variables so Iterator::join() can be used.
