@@ -131,7 +131,7 @@ pub struct Args {
     pub db_path: Option<PathBuf>,
 
     /// Specify the number of jobs to create. Defaults to num_cpus
-    #[clap(short, long, value_name = "CONCURRENCY_LIMIT")]
+    #[clap(short, long, value_name = "CONCURRENCY_LIMIT", value_parser = parse_nonzero_usize)]
     pub parallel: Option<usize>,
 
     /// Moves the `default_audio_stream`th audio stream with the given language code to the front, and marks it as
@@ -234,6 +234,14 @@ impl Args {
                 std::process::exit(1);
             }
         }
+    }
+}
+
+fn parse_nonzero_usize(s: &str) -> Result<usize, String> {
+    match s.parse::<usize>() {
+        Ok(0) => Err("value must be at least 1".to_owned()),
+        Ok(x) => Ok(x),
+        Err(e) => Err(e.to_string()),
     }
 }
 
