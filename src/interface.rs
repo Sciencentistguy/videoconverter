@@ -21,7 +21,7 @@ pub struct Args {
     #[clap(long, default_value = "20")]
     pub crf: u8,
 
-    /// Specify a crop filter. These are of the format `crop=height:width:x:y`
+    /// Specify a crop filter. These are of the format `crop=width:height:x:y`
     #[clap(long)]
     pub crop: Option<CropFilter>,
 
@@ -255,12 +255,17 @@ impl FromStr for CropFilter {
         let r = Regex::new(r"^crop=(\d+):(\d+):(\d+):(\d+)$").unwrap();
         let capts = r
             .captures(input)
-            .ok_or("Error: Crop filter must be of the form `crop=height:width:x:y`")?;
+            .ok_or("Error: Crop filter must be of the form `crop=width:height:x:y`")?;
 
-        let height = capts.get(1).unwrap().as_str();
-        let width = capts.get(2).unwrap().as_str();
-        let x = capts.get(3).unwrap().as_str();
-        let y = capts.get(4).unwrap().as_str();
+        let parse = |i| {
+            capts
+                .get(i)
+                .unwrap()
+                .as_str()
+                .parse::<u32>()
+                .map_err(|_| "Crop values must fit in a 32-bit integer")
+        };
+        let (width, height, x, y) = (parse(1)?, parse(2)?, parse(3)?, parse(4)?);
 
         if x > width {
             return Err("Crop x value cannot be greater than width");
