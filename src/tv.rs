@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use question::Answer;
 use serde::{Deserialize, Serialize};
-use tracing::trace;
+use tracing::{trace, warn};
 
 use crate::{ARGS, state::Db, util};
 
@@ -59,7 +59,12 @@ impl TVOptions {
 
         let mut using_db = false;
 
-        let previous_state = title.and_then(|title| db.find(title));
+        let previous_state = title.and_then(|title| {
+            db.find(title).unwrap_or_else(|err| {
+                warn!(%err, "Failed to look up title in DB");
+                None
+            })
+        });
         let guessed_title = previous_state.as_ref().map(|state| state.title.clone());
 
         let title = {

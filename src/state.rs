@@ -1,7 +1,6 @@
 use crate::{ARGS, Result, tv::TVOptions};
 
-use std::error::Error;
-
+use color_eyre::eyre::eyre;
 use rusqlite::{Connection, OptionalExtension, params};
 use tabular::{Table, row};
 use tap::Tap;
@@ -13,16 +12,18 @@ pub struct Db {
 }
 
 impl Db {
-    pub fn new() -> Result<Self, Box<dyn Error>> {
+    pub fn new() -> Result<Self> {
         let path = if let Some(db_path) = &ARGS.db_path {
             db_path.clone()
         } else {
             dirs::cache_dir()
-                .unwrap()
+                .ok_or_else(|| eyre!("Could not determine a cache directory; pass --statefile"))?
                 .join("videoconverter/videoconverter.sqlite")
         };
         if path.is_dir() {
-            return Err(format!("Database path {path:?} is a directory, expected a file").into());
+            return Err(eyre!(
+                "Database path {path:?} is a directory, expected a file"
+            ));
         }
         if let Some(parent) = path.parent()
             && !parent.exists()
@@ -59,7 +60,8 @@ impl Db {
 
         Ok(Self { connection })
     }
-    pub fn find(&self, title: &str) -> Option<TVOptions> {
+
+    pub fn find(&self, title: &str) -> Result<Option<TVOptions>> {
         let title = title
             .to_lowercase()
             .replace(|c: char| !c.is_ascii_alphanumeric() && c != ' ', " ");
@@ -67,9 +69,15 @@ impl Db {
         // Split into words and join with " OR " to allow partial matches
         let query = title.split_whitespace().collect::<Vec<_>>().join(" OR ");
 
+        // An empty MATCH expression is an FTS5 syntax error
+        if query.is_empty() {
+            trace!("Title contains no searchable words.");
+            return Ok(None);
+        }
+
         trace!(query = %query, "Searching DB for title match.");
 
-        let (title, season, episode) = self
+        let found = self
             .connection
             .query_row(
                 "SELECT entries.title, entries.season, entries.episode
@@ -81,55 +89,50 @@ impl Db {
                     ",
                 params![query],
                 |row| {
-                    let title = row.get(0)?;
-                    let season = row.get(1)?;
-                    let episode = row.get(2)?;
-                    Ok((title, season, episode))
+                    Ok(TVOptions {
+                        title: row.get(0)?,
+                        season: row.get(1)?,
+                        episode: row.get(2)?,
+                    })
                 },
             )
-            .optional()
-            .unwrap()
-            .tap(|res| {
-                if let Some((title, season, episode)) = res {
-                    trace!(%title, %season, %episode, "Found matching entry in DB.");
-                } else {
-                    trace!("No matching TV show found in DB.");
-                }
-            })?;
+            .optional()?
+            .tap(|res| match res {
+                Some(TVOptions {
+                    title,
+                    season,
+                    episode,
+                }) => trace!(%title, %season, %episode, "Found matching entry in DB."),
+                None => trace!("No matching TV show found in DB."),
+            });
 
-        Some(TVOptions {
-            title,
-            season,
-            episode,
-        })
+        Ok(found)
     }
 
-    pub fn write(&self, state: &TVOptions) {
+    pub fn write(&self, state: &TVOptions) -> Result<()> {
         trace!(title = %state.title, season = %state.season, episode = %state.episode, "Writing TV show state to DB.");
-        self.connection
-            .execute(
-                "INSERT INTO entries (title, season, episode)
+        self.connection.execute(
+            "INSERT INTO entries (title, season, episode)
                      VALUES (?1, ?2, ?3)
                      ON CONFLICT(title) DO UPDATE SET
                         season  = excluded.season,
                         episode = excluded.episode;
                     ",
-                params![state.title, state.season, state.episode],
-            )
-            .unwrap();
+            params![state.title, state.season, state.episode],
+        )?;
+        Ok(())
     }
 
-    pub fn update_episode(&self, title: &str, episode: u32) {
+    pub fn update_episode(&self, title: &str, episode: u32) -> Result<()> {
         trace!(title = %title, episode = %episode, "Updating episode number in DB.");
-        self.connection
-            .execute(
-                "UPDATE entries
+        self.connection.execute(
+            "UPDATE entries
                      SET episode = ?1
                      WHERE title = ?2;
                     ",
-                params![episode, title],
-            )
-            .unwrap();
+            params![episode, title],
+        )?;
+        Ok(())
     }
 
     pub fn dump(&self) -> Result<()> {

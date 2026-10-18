@@ -54,7 +54,7 @@ fn main() -> Result<()> {
 
     debug!(?ARGS);
 
-    let db = Db::new().unwrap();
+    let db = Db::new()?;
 
     // Shut libav* up
     // Safety: No other threads exist, mutating global state is fine.
@@ -182,7 +182,7 @@ fn main() -> Result<()> {
     };
 
     if let Some(ref tv_options) = tv_options {
-        db.write(tv_options);
+        db.write(tv_options)?;
     }
 
     debug!(?tv_options);
@@ -376,7 +376,7 @@ fn main() -> Result<()> {
     }
 
     if let Some(TVOptions { title, episode, .. }) = tv_options {
-        db.update_episode(&title, episode - 1);
+        db.update_episode(&title, episode.saturating_sub(1))?;
     }
 
     if ARGS.print_commands {
