@@ -36,17 +36,12 @@ pub fn generate_output_filename<P: AsRef<Path>>(
             }
         })
     } else {
-        let input_filename = path
+        path.with_extension("mkv")
             .file_name()
             .expect("input_filepath should have a filename")
             .to_str()
-            .unwrap();
-        let input_ext = path
-            .extension()
-            .expect("input_filepath should have an extension")
-            .to_str()
-            .unwrap();
-        input_filename.replace(input_ext, "mkv")
+            .unwrap()
+            .to_owned()
     }
 }
 
