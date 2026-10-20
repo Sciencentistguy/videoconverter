@@ -73,7 +73,7 @@
               sqlite
               rustPlatform.bindgenHook
             ]
-            ++ lib.optionals (stdenv.isDarwin) [
+            ++ lib.optionals (stdenv.hostPlatform.isDarwin) [
               libiconv
             ]
           );
@@ -88,7 +88,7 @@
         };
     in rec {
       packages.videoconverter = pkgs.callPackage videoconverter {
-        ffmpeg = pkgs.ffmpeg_8.override {
+        ffmpeg = pkgs.ffmpeg_9.override {
           ffmpegVariant = "full";
           withFullDeps = true;
           withUnfree = true;
@@ -96,7 +96,7 @@
         inherit rustPlatform;
       };
       packages.videoconverter-ci = pkgs.callPackage videoconverter {
-        ffmpeg = pkgs.ffmpeg_8;
+        ffmpeg = pkgs.ffmpeg_9;
         inherit rustPlatform;
       };
 
