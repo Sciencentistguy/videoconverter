@@ -45,6 +45,7 @@
         rustPlatform,
         lib,
         pkg-config,
+        patchelf,
         ffmpeg,
         sqlite,
       }:
@@ -64,6 +65,7 @@
 
           nativeBuildInputs = [
             pkg-config
+            patchelf
             rustPlatform.bindgenHook
           ];
 
@@ -77,6 +79,11 @@
               libiconv
             ]
           );
+
+          # The binary is built without an RPATH, so libav* and libsqlite3 would not be found
+          postFixup = ''
+            patchelf --add-rpath ${lib.makeLibraryPath [ffmpeg sqlite]} $out/bin/videoconverter
+          '';
 
           inherit ffmpeg;
 
