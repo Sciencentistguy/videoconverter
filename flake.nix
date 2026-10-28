@@ -81,7 +81,7 @@
           );
 
           # The binary is built without an RPATH, so libav* and libsqlite3 would not be found
-          postFixup = ''
+          postFixup = lib.optionals pkgs.stdenv.isLinux ''
             patchelf --add-rpath ${lib.makeLibraryPath [ffmpeg sqlite]} $out/bin/videoconverter
           '';
 
