@@ -16,6 +16,8 @@ Run `videoconverter -h` to see all possible arguments and their defaults.
 
 `--output FILE` converts an input to exactly that path, without asking about TV mode or renaming, so other programs (such as [reel](https://github.com/Sciencentistguy/reel)) can drive it. Give one `--output` per input file, in the same order, to convert several in parallel: `videoconverter -y -o a.mkv -o b.mkv -- in/a.mp4 in/b.mp4`. Combine it with `--yes`, and with `--no-external-subs` to leave subtitle files beside the input alone.
 
+`--plan` (with `--output`) prints, as one JSON object per input, the streams each output would keep in order, each with its input stream index, output codec and whether it is copied, then exits without converting.
+
 With `--output`, an input that cannot be read is reported and skipped rather than stopping the others. The exit status is non-zero when any input is not converted, and 130 when interrupted with Ctrl-C. A failed or interrupted conversion's output is deleted unless it was there beforehand, so every output a run creates and leaves behind is complete.
 
 If TV show mode is enabled, the program will ask for the following:

@@ -112,6 +112,11 @@ pub struct Args {
     #[clap(long)]
     pub no_external_subs: bool,
 
+    /// Print the streams each input would keep, and what each would become, as one JSON
+    /// object per line, then exit without converting anything
+    #[clap(long, requires = "output")]
+    pub plan: bool,
+
     /// The directory prefix to insert tv shows to
     #[clap(long, env = "VIDEOCONVERTER_TV_OUTPUT_PREFIX")]
     pub tv_output_prefix: Option<PathBuf>,

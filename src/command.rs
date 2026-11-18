@@ -71,12 +71,76 @@ impl GetEncoderExt for codec::Id {
     }
 }
 
+/// Which of a file's audio and subtitle streams were moved to the front to be marked as default.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DefaultStreams {
+    pub audio: bool,
+    pub subtitle: bool,
+}
+
+/// Moves the user's chosen default audio and subtitle streams to the front of `mappings`.
+pub fn move_defaults_first(input_path: &Path, mappings: &mut StreamMappings) -> DefaultStreams {
+    let mut default_audio_set = false;
+    if let Some(lang) = ARGS.default_audio_language.as_deref() {
+        match mappings
+            .audio
+            .iter()
+            .enumerate()
+            .filter(|(_, stream)| stream.as_audio().and_then(|x| x.lang.as_deref()) == Some(lang))
+            .map(|(idx, _)| idx)
+            .nth(ARGS.default_audio_stream)
+        {
+            None => {
+                error!(
+                    filename = ?input_path,
+                    "Stream with language {lang} could not be found. Has it been discarded?"
+                );
+            }
+            Some(target_stream_idx) => {
+                mappings.audio.swap(0, target_stream_idx);
+                default_audio_set = true;
+            }
+        }
+    }
+
+    let mut default_subtitle_set = false;
+    if let Some(lang) = ARGS.default_subtitle_language.as_deref() {
+        match mappings
+            .subtitle
+            .iter()
+            .enumerate()
+            .filter(|(_, stream)| {
+                stream.as_subtitle().and_then(|x| x.lang.as_deref()) == Some(lang)
+            })
+            .map(|(idx, _)| idx)
+            .nth(ARGS.default_subtitle_stream)
+        {
+            None => {
+                error!(
+                    filename = ?input_path,
+                    "Stream with language {lang} could not be found. Has it been discarded?"
+                );
+            }
+            Some(target_stream_idx) => {
+                mappings.subtitle.swap(0, target_stream_idx);
+                default_subtitle_set = true;
+            }
+        }
+    }
+
+    DefaultStreams {
+        audio: default_audio_set,
+        subtitle: default_subtitle_set,
+    }
+}
+
 pub fn generate_ffmpeg_command<P: AsRef<Path>>(
     input_path: P,
     associated_subs: &[PathBuf],
     output_path: P,
-    mut mappings: StreamMappings,
+    mappings: StreamMappings,
     target_codecs: HashMap<(usize, usize), Option<codec::Id>>,
+    defaults: DefaultStreams,
 ) -> std::result::Result<Command, CommandError> {
     let mut command = Command::new(&ARGS.ffmpeg_path);
     command.arg("-hide_banner"); // Remove gpl banner
@@ -194,56 +258,6 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
 
     // With large files this is needed to avoid an ffmpeg crash
     command.args(["-max_muxing_queue_size", "16384"]);
-
-    // Move the user's chosen default audio/subtitle streams to the front *before* any per-output
-    // stream arguments are generated, as those are indexed by output position.
-    let mut default_audio_set = false;
-    if let Some(lang) = ARGS.default_audio_language.as_deref() {
-        match mappings
-            .audio
-            .iter()
-            .enumerate()
-            .filter(|(_, stream)| stream.as_audio().and_then(|x| x.lang.as_deref()) == Some(lang))
-            .map(|(idx, _)| idx)
-            .nth(ARGS.default_audio_stream)
-        {
-            None => {
-                error!(
-                    filename = ?input_path.as_ref(),
-                    "Stream with language {lang} could not be found. Has it been discarded?"
-                );
-            }
-            Some(target_stream_idx) => {
-                mappings.audio.swap(0, target_stream_idx);
-                default_audio_set = true;
-            }
-        }
-    }
-
-    let mut default_subtitle_set = false;
-    if let Some(lang) = ARGS.default_subtitle_language.as_deref() {
-        match mappings
-            .subtitle
-            .iter()
-            .enumerate()
-            .filter(|(_, stream)| {
-                stream.as_subtitle().and_then(|x| x.lang.as_deref()) == Some(lang)
-            })
-            .map(|(idx, _)| idx)
-            .nth(ARGS.default_subtitle_stream)
-        {
-            None => {
-                error!(
-                    filename = ?input_path.as_ref(),
-                    "Stream with language {lang} could not be found. Has it been discarded?"
-                );
-            }
-            Some(target_stream_idx) => {
-                mappings.subtitle.swap(0, target_stream_idx);
-                default_subtitle_set = true;
-            }
-        }
-    }
 
     let generate_codec_args = |command: &mut Command,
                                stream_type: char,
@@ -374,7 +388,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         )?;
     }
 
-    if default_audio_set {
+    if defaults.audio {
         // Set the default disposition for all audio streams to 0 (not default)
         for stream_idx in 1..mappings.audio.len() {
             command.arg(format!("-disposition:a:{}", stream_idx));
@@ -386,7 +400,7 @@ pub fn generate_ffmpeg_command<P: AsRef<Path>>(
         command.arg("default");
     }
 
-    if default_subtitle_set {
+    if defaults.subtitle {
         // Set the default disposition for all subtitle streams to 0 (not default)
         for stream_idx in 1..mappings.subtitle.len() {
             command.arg(format!("-disposition:s:{}", stream_idx));

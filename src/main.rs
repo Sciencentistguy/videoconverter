@@ -14,6 +14,7 @@ mod command;
 mod directory;
 mod input;
 mod interface;
+mod plan;
 mod state;
 mod tv;
 mod util;
@@ -233,13 +234,15 @@ fn main() -> Result<()> {
         None
     };
 
-    println!(
-        "{}{} {}{}",
-        "Green".green().dimmed().bold(),
-        ": path does not exist".dimmed(),
-        "Red".red(),
-        ": path althready exists".dimmed()
-    );
+    if !ARGS.plan {
+        println!(
+            "{}{} {}{}",
+            "Green".green().dimmed().bold(),
+            ": path does not exist".dimmed(),
+            "Red".red(),
+            ": path althready exists".dimmed()
+        );
+    }
 
     // With --output, an input that cannot be converted is reported and skipped, so that it does
     // not stop the others; otherwise it stops everything, before any conversion starts.
@@ -310,8 +313,9 @@ fn main() -> Result<()> {
             parsed.extend_from_slice(&streams);
         }
 
-        let stream_mappings = input::get_stream_mappings(&parsed);
+        let mut stream_mappings = input::get_stream_mappings(&parsed);
         let codec_mappings = input::get_codec_mapping(&stream_mappings);
+        let defaults = command::move_defaults_first(input_filepath, &mut stream_mappings);
 
         let mappings = &stream_mappings;
         let codecs = &codec_mappings;
@@ -324,6 +328,14 @@ fn main() -> Result<()> {
                 )),
                 input_filepath
             );
+        }
+
+        if ARGS.plan {
+            println!(
+                "{}",
+                plan::describe(input_filepath, &output_path, mappings, codecs)
+            );
+            continue;
         }
 
         print!("Input file '{}' -> ", input_filepath.display());
@@ -409,6 +421,7 @@ fn main() -> Result<()> {
             &output_path,
             stream_mappings,
             codec_mappings,
+            defaults,
         );
         let length = or_skip!(input::length(input_filepath), input_filepath);
 
@@ -431,6 +444,13 @@ fn main() -> Result<()> {
             }
             Err(err) => or_skip!(Err::<(), _>(err), input_filepath),
         }
+    }
+
+    if ARGS.plan {
+        if !errored_paths.is_empty() {
+            return Err(eyre!("{} input(s) could not be planned", errored_paths.len()));
+        }
+        return Ok(());
     }
 
     if let Some(TVOptions { title, episode, .. }) = tv_options {
