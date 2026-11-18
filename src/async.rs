@@ -1,9 +1,15 @@
-use std::{process::Stdio, sync::Arc, time::Duration};
+use std::{
+    path::Path,
+    process::{ExitStatus, Stdio},
+    sync::Arc,
+    time::Duration,
+};
 
 use color_eyre::eyre::eyre;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use tokio::{
     io::{AsyncBufReadExt as _, BufReader},
+    process::Child,
     signal,
     sync::{Semaphore, broadcast},
     task::JoinSet,
@@ -60,6 +66,7 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
              Err(Interrupted.into())
         }
         ret = async {
+            let mut failed = 0;
             for Command {
                 inner: mut command,
                 length,
@@ -71,107 +78,54 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
                 command.arg("pipe:1");
                 command.stdout(Stdio::piped());
                 command.stderr(Stdio::null());
+                // Should this task end early, its ffmpeg must not carry on writing unseen.
+                command.kill_on_drop(true);
 
-                // move closures be like
-                let handle = command.spawn()?;
+                // An existing output is one the user chose to overwrite, which ffmpeg may not have
+                // touched before failing, so only outputs this run creates are removed.
+                let existed = filename.exists();
+                let handle = match command.spawn() {
+                    Ok(handle) => handle,
+                    Err(err) => {
+                        error!(file = ?filename, %err, "Failed to start ffmpeg");
+                        failed += 1;
+                        continue;
+                    }
+                };
                 let mpb = mpb.clone();
                 let overall_pb = overall_pb.clone();
                 let mut rx = tx.subscribe();
 
                 js.spawn(async move {
-                    let mut handle = handle;
-                    let stdout = handle
-                        .stdout
-                        .take()
-                        .ok_or_else(|| eyre!("ffmpeg stdout was not captured"))?;
-                    let reader = BufReader::new(stdout);
-                    let mut lines = reader.lines();
-
-                    let pb = ProgressBar::new(length.as_micros() as _);
-                    if let Some(overall_pb) = &overall_pb {
-                        mpb.insert_before(overall_pb, pb.clone());
-                    } else {
-                        mpb.add(pb.clone());
+                    let result = convert(handle, length, &filename, &mpb, overall_pb.as_ref(), &mut rx).await;
+                    // Only finished outputs are left behind, so callers can trust them
+                    if !existed && !matches!(&result, Ok(status) if status.success()) {
+                        let _ = tokio::fs::remove_file(&filename).await;
                     }
-
-                    pb.set_style(
-                        ProgressStyle::with_template(
-                            "[{elapsed}] {msg} {wide_bar:.cyan/blue} {percent_precise:>6}% (eta: {eta})",
-                        )?
-                        .progress_chars("=>-"),
-                    );
-                    pb.set_message(
-                        filename
-                            .file_name()
-                            .ok_or_else(|| eyre!("Output path has no filename"))?
-                            .to_string_lossy()
-                            .to_string(),
-                    );
-
-                    loop {
-                        tokio::select! {
-                            val = lines.next_line() => {
-                                match val {
-                                    Ok(Some(line)) => {
-                                        if let Some("end") = line.strip_prefix("progress=") {
-                                            break;
-                                        }
-                                        if let Some(us) = line.strip_prefix("out_time_us=") {
-                                            let Ok(us) = us.parse() else {
-                                                warn!("Failed to parse out_time_us value: {}", us);
-                                                continue;
-                                            };
-                                            let dur = Duration::from_micros(us);
-                                            pb.set_position(dur.as_micros() as u64);
-                                        }
-                                    }
-                                    _ => break,
-                                }
-                            }
-                            _ = rx.recv() => {
-                                let _ = handle.kill().await;
-                                let _ = handle.wait().await;
-                                let _ = tokio::fs::remove_file(&filename).await;
-                                pb.finish_and_clear();
-                                drop(permit);
-                                return Err(eyre!("Cancelled"));
-                            }
-                        }
-                    }
-
-                    tokio::select! {
-                        ret = handle.wait() => {
-                            // Only finished outputs are left behind, so callers can trust them
-                            if !matches!(&ret, Ok(status) if status.success()) {
-                                let _ = tokio::fs::remove_file(&filename).await;
-                            }
-                            overall_pb.inspect(|pb| pb.inc(1));
-                            pb.finish_and_clear();
-                            drop(permit);
-                            ret.map_err(|e| e.into())
-                        }
-                        _ = rx.recv() => {
-                            let _ = handle.kill().await;
-                            let _ = handle.wait().await;
-                            let _ = tokio::fs::remove_file(&filename).await;
-                            pb.finish_and_clear();
-                            drop(permit);
-                            Err(eyre!("Cancelled"))
-                        }
-                    }
+                    drop(permit);
+                    result
                 });
             }
 
-            let mut failed = 0;
-            while let Some(status) = js.join_next().await {
-                let status = status??;
-                if !status.success() {
-                    let msg = match status.code() {
-                        Some(234) => "usually caused by a problematic stream in the source file",
-                        _ => "unknown"
-                    };
-                    error!("Command failed with status code {}: {}", status.code().unwrap_or(-1), msg);
-                    failed += 1;
+            while let Some(joined) = js.join_next().await {
+                match joined {
+                    Ok(Ok(status)) if status.success() => {}
+                    Ok(Ok(status)) => {
+                        let msg = match status.code() {
+                            Some(234) => "usually caused by a problematic stream in the source file",
+                            _ => "unknown"
+                        };
+                        error!("Command failed with status code {}: {}", status.code().unwrap_or(-1), msg);
+                        failed += 1;
+                    }
+                    Ok(Err(err)) => {
+                        error!("Command failed: {err}");
+                        failed += 1;
+                    }
+                    Err(err) => {
+                        error!("Command task failed: {err}");
+                        failed += 1;
+                    }
                 }
             }
             if failed > 0 {
@@ -179,5 +133,86 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
             }
             Ok(())
         } => ret,
+    }
+}
+
+/// Follows one ffmpeg process to completion, showing its progress, unless cancelled through `rx`.
+async fn convert(
+    mut handle: Child,
+    length: Duration,
+    filename: &Path,
+    mpb: &MultiProgress,
+    overall_pb: Option<&ProgressBar>,
+    rx: &mut broadcast::Receiver<()>,
+) -> Result<ExitStatus> {
+    let stdout = handle
+        .stdout
+        .take()
+        .ok_or_else(|| eyre!("ffmpeg stdout was not captured"))?;
+    let reader = BufReader::new(stdout);
+    let mut lines = reader.lines();
+
+    let pb = ProgressBar::new(length.as_micros() as _);
+    if let Some(overall_pb) = overall_pb {
+        mpb.insert_before(overall_pb, pb.clone());
+    } else {
+        mpb.add(pb.clone());
+    }
+
+    pb.set_style(
+        ProgressStyle::with_template(
+            "[{elapsed}] {msg} {wide_bar:.cyan/blue} {percent_precise:>6}% (eta: {eta})",
+        )?
+        .progress_chars("=>-"),
+    );
+    pb.set_message(
+        filename
+            .file_name()
+            .ok_or_else(|| eyre!("Output path has no filename"))?
+            .to_string_lossy()
+            .to_string(),
+    );
+
+    loop {
+        tokio::select! {
+            val = lines.next_line() => {
+                match val {
+                    Ok(Some(line)) => {
+                        if let Some("end") = line.strip_prefix("progress=") {
+                            break;
+                        }
+                        if let Some(us) = line.strip_prefix("out_time_us=") {
+                            let Ok(us) = us.parse() else {
+                                warn!("Failed to parse out_time_us value: {}", us);
+                                continue;
+                            };
+                            let dur = Duration::from_micros(us);
+                            pb.set_position(dur.as_micros() as u64);
+                        }
+                    }
+                    _ => break,
+                }
+            }
+            _ = rx.recv() => {
+                let _ = handle.kill().await;
+                let _ = handle.wait().await;
+                pb.finish_and_clear();
+                return Err(eyre!("Cancelled"));
+            }
+        }
+    }
+
+    tokio::select! {
+        ret = handle.wait() => {
+            overall_pb.inspect(|pb| pb.inc(1));
+            pb.finish_and_clear();
+            ret.map_err(|e| e.into())
+        }
+        _ = rx.recv() => {
+            let _ = handle.kill().await;
+            let _ = handle.wait().await;
+            pb.finish_and_clear();
+            Err(eyre!("Cancelled"))
+        }
     }
 }
