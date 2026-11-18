@@ -131,6 +131,7 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
                             _ = rx.recv() => {
                                 let _ = handle.kill().await;
                                 let _ = handle.wait().await;
+                                let _ = tokio::fs::remove_file(&filename).await;
                                 pb.finish_and_clear();
                                 drop(permit);
                                 return Err(eyre!("Cancelled"));
@@ -140,6 +141,10 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
 
                     tokio::select! {
                         ret = handle.wait() => {
+                            // Only finished outputs are left behind, so callers can trust them
+                            if !matches!(&ret, Ok(status) if status.success()) {
+                                let _ = tokio::fs::remove_file(&filename).await;
+                            }
                             overall_pb.inspect(|pb| pb.inc(1));
                             pb.finish_and_clear();
                             drop(permit);
@@ -148,6 +153,7 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
                         _ = rx.recv() => {
                             let _ = handle.kill().await;
                             let _ = handle.wait().await;
+                            let _ = tokio::fs::remove_file(&filename).await;
                             pb.finish_and_clear();
                             drop(permit);
                             Err(eyre!("Cancelled"))

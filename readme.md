@@ -14,9 +14,9 @@ Alternatively, `cargo install` should work provided you have `ffmpeg` installed 
 
 Run `videoconverter -h` to see all possible arguments and their defaults.
 
-`--output FILE` converts a single input to exactly that path, without asking about TV mode or renaming, so other programs (such as [reel](https://github.com/Sciencentistguy/reel)) can drive it. Combine it with `--yes`, and with `--no-external-subs` to leave subtitle files beside the input alone.
+`--output FILE` converts an input to exactly that path, without asking about TV mode or renaming, so other programs (such as [reel](https://github.com/Sciencentistguy/reel)) can drive it. Give one `--output` per input file, in the same order, to convert several in parallel: `videoconverter -y -o a.mkv -o b.mkv -- in/a.mp4 in/b.mp4`. Combine it with `--yes`, and with `--no-external-subs` to leave subtitle files beside the input alone.
 
-The exit status is non-zero when any ffmpeg command fails, and 130 when interrupted with Ctrl-C.
+The exit status is non-zero when any ffmpeg command fails, and 130 when interrupted with Ctrl-C. The output of a failed or interrupted conversion is deleted, so every output left behind is complete.
 
 If TV show mode is enabled, the program will ask for the following:
 

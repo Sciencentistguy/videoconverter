@@ -1,7 +1,7 @@
 extern crate ffmpeg_next as ffmpeg;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::ErrorKind,
     iter,
     os::unix::prelude::OsStrExt,
@@ -69,6 +69,7 @@ fn main() -> Result<()> {
         return db.remove_entry(title);
     }
 
+    let mut explicit_outputs: HashMap<PathBuf, PathBuf> = HashMap::new();
     let entries = {
         let mut entries = Vec::new();
 
@@ -76,7 +77,7 @@ fn main() -> Result<()> {
         //  - If it's a file, add it unconditionally - the user knows what they're doing
         //  - If it's a directory, walk it and add all files in it, if they are compatible
         // `path` should never be a symlink, as we canonicalize it.
-        for path in ARGS.path.iter() {
+        for (i, path) in ARGS.path.iter().enumerate() {
             let path = match path.canonicalize() {
                 Ok(path) => path,
                 Err(e) if e.kind() == ErrorKind::NotFound => {
@@ -91,6 +92,15 @@ fn main() -> Result<()> {
                     ));
                 }
             };
+
+            if let Some(output) = ARGS.output.get(i) {
+                if !path.is_file() {
+                    return Err(eyre!("--output needs a file input, not '{}'", path.display()));
+                }
+                if explicit_outputs.insert(path.clone(), output.clone()).is_some() {
+                    return Err(eyre!("Input '{}' is given twice", path.display()));
+                }
+            }
 
             if path.is_file() {
                 entries.push(path);
@@ -161,16 +171,12 @@ fn main() -> Result<()> {
         })
         .collect();
 
-    if ARGS.output.is_some() && entries.len() != 1 {
-        return Err(eyre!("--output takes exactly one input file"));
-    }
-
-    let mut tv_options = if ARGS.output.is_some() {
+    let mut tv_options = if !ARGS.output.is_empty() {
         None
     } else {
         TVOptions::from_cli(&db, title.as_deref(), &filename_information)?
     };
-    let rename_title = if tv_options.is_none() && entries.len() == 1 && ARGS.output.is_none() {
+    let rename_title = if tv_options.is_none() && entries.len() == 1 && ARGS.output.is_empty() {
         let rename = util::confirm("Rename the file? (disables folder creation)", None)?;
         if rename {
             Some(util::prompt("Title to rename to:")?)
@@ -217,14 +223,10 @@ fn main() -> Result<()> {
 
     let mut commands = Vec::with_capacity(entries.len());
 
-    let output_dir = match ARGS.output.as_deref() {
-        Some(output) => OutputDir(
-            output
-                .parent()
-                .filter(|parent| !parent.as_os_str().is_empty())
-                .map_or_else(|| PathBuf::from("."), Path::to_owned),
-        ),
-        None => OutputDir::new(&tv_options, &rename_title)?,
+    let output_dir = if ARGS.output.is_empty() {
+        Some(OutputDir::new(&tv_options, &rename_title)?)
+    } else {
+        None
     };
 
     let mut errored_paths = Vec::new();
@@ -243,13 +245,16 @@ fn main() -> Result<()> {
             .map(|v| v.as_slice())
             .unwrap_or(&[]);
 
-        let output_path = match &ARGS.output {
-            Some(output) => output.clone(),
-            None => output_dir.0.join(command::generate_output_filename(
+        let output_path = match (explicit_outputs.get(input_filepath), &output_dir) {
+            (Some(output), _) => output.clone(),
+            (None, Some(output_dir)) => output_dir.0.join(command::generate_output_filename(
                 input_filepath,
                 &tv_options,
                 rename_title.as_deref(),
             )?),
+            (None, None) => {
+                return Err(eyre!("No --output for '{}'", input_filepath.display()));
+            }
         };
 
         if let Some(ref mut tv_options) = tv_options {
@@ -429,12 +434,16 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    output_dir.create().wrap_err_with(|| {
-        format!(
-            "Failed to create output directory '{}'",
-            output_dir.0.display()
-        )
-    })?;
+    let output_dirs: HashSet<&Path> = commands
+        .iter()
+        .filter_map(|command| command.filename.parent())
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .collect();
+    for dir in output_dirs {
+        OutputDir(dir.to_owned())
+            .create()
+            .wrap_err_with(|| format!("Failed to create output directory '{}'", dir.display()))?;
+    }
 
     let rt = Runtime::new()?;
     if let Err(err) = rt.block_on(r#async::run_commands(commands)) {
