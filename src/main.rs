@@ -437,7 +437,12 @@ fn main() -> Result<()> {
     })?;
 
     let rt = Runtime::new()?;
-    rt.block_on(r#async::run_commands(commands))?;
+    if let Err(err) = rt.block_on(r#async::run_commands(commands)) {
+        if err.is::<r#async::Interrupted>() {
+            std::process::exit(130);
+        }
+        return Err(err);
+    }
 
     if !errored_paths.is_empty() {
         eprintln!("Errors occured in {} paths:", errored_paths.len());

@@ -12,6 +12,10 @@ use tracing::{error, warn};
 
 use crate::{ARGS, Command, Result};
 
+#[derive(Debug, thiserror::Error)]
+#[error("interrupted")]
+pub struct Interrupted;
+
 pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
     let count = match ARGS.parallel {
         None => num_cpus::get(),
@@ -53,7 +57,7 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
              eprintln!("\nCtrl-C received, stopping...");
              let _ = tx.send(());
              while js.join_next().await.is_some() {}
-             Ok(())
+             Err(Interrupted.into())
         }
         ret = async {
             for Command {
@@ -152,6 +156,7 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
                 });
             }
 
+            let mut failed = 0;
             while let Some(status) = js.join_next().await {
                 let status = status??;
                 if !status.success() {
@@ -160,7 +165,11 @@ pub async fn run_commands(commands: Vec<Command>) -> Result<()> {
                         _ => "unknown"
                     };
                     error!("Command failed with status code {}: {}", status.code().unwrap_or(-1), msg);
+                    failed += 1;
                 }
+            }
+            if failed > 0 {
+                return Err(eyre!("{failed} command(s) failed"));
             }
             Ok(())
         } => ret,
