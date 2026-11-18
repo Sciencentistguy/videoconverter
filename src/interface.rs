@@ -103,6 +103,14 @@ pub struct Args {
     #[clap(long)]
     pub output_path: Option<PathBuf>,
 
+    /// Write the single input file to exactly this path, without asking about TV mode or renaming
+    #[clap(short, long, value_name = "FILE", conflicts_with_all = &["tv_mode", "output_path"])]
+    pub output: Option<PathBuf>,
+
+    /// Do not mux subtitle files that sit next to the input
+    #[clap(long)]
+    pub no_external_subs: bool,
+
     /// The directory prefix to insert tv shows to
     #[clap(long, env = "VIDEOCONVERTER_TV_OUTPUT_PREFIX")]
     pub tv_output_prefix: Option<PathBuf>,
@@ -225,6 +233,9 @@ pub struct Args {
 
 impl Args {
     pub fn validate(&self) -> Result<()> {
+        if self.output.is_some() && self.path.len() != 1 {
+            return Err(eyre!("--output takes exactly one input file"));
+        }
         if matches!(self.encoder, VideoEncoder::Nvenc) {
             if self.no_hwaccel {
                 return Err(eyre!(

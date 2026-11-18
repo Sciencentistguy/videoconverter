@@ -161,8 +161,16 @@ fn main() -> Result<()> {
         })
         .collect();
 
-    let mut tv_options = TVOptions::from_cli(&db, title.as_deref(), &filename_information)?;
-    let rename_title = if tv_options.is_none() && entries.len() == 1 {
+    if ARGS.output.is_some() && entries.len() != 1 {
+        return Err(eyre!("--output takes exactly one input file"));
+    }
+
+    let mut tv_options = if ARGS.output.is_some() {
+        None
+    } else {
+        TVOptions::from_cli(&db, title.as_deref(), &filename_information)?
+    };
+    let rename_title = if tv_options.is_none() && entries.len() == 1 && ARGS.output.is_none() {
         let rename = util::confirm("Rename the file? (disables folder creation)", None)?;
         if rename {
             Some(util::prompt("Title to rename to:")?)
@@ -183,7 +191,7 @@ fn main() -> Result<()> {
 
     let mut associated_subtitles: HashMap<&Path, Vec<PathBuf>> = HashMap::new();
 
-    for path in &entries {
+    for path in entries.iter().filter(|_| !ARGS.no_external_subs) {
         let videofile_name = path
             .file_stem()
             .ok_or_else(|| eyre!("Input path '{}' has no filename", path.display()))?
@@ -209,7 +217,15 @@ fn main() -> Result<()> {
 
     let mut commands = Vec::with_capacity(entries.len());
 
-    let output_dir = OutputDir::new(&tv_options, &rename_title)?;
+    let output_dir = match ARGS.output.as_deref() {
+        Some(output) => OutputDir(
+            output
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .map_or_else(|| PathBuf::from("."), Path::to_owned),
+        ),
+        None => OutputDir::new(&tv_options, &rename_title)?,
+    };
 
     let mut errored_paths = Vec::new();
 
@@ -227,12 +243,14 @@ fn main() -> Result<()> {
             .map(|v| v.as_slice())
             .unwrap_or(&[]);
 
-        let output_filename = command::generate_output_filename(
-            input_filepath,
-            &tv_options,
-            rename_title.as_deref(),
-        )?;
-        let output_path = output_dir.0.join(output_filename);
+        let output_path = match &ARGS.output {
+            Some(output) => output.clone(),
+            None => output_dir.0.join(command::generate_output_filename(
+                input_filepath,
+                &tv_options,
+                rename_title.as_deref(),
+            )?),
+        };
 
         if let Some(ref mut tv_options) = tv_options {
             if let Some((season, episode)) = filename_information.get(&i) {
