@@ -70,6 +70,7 @@ fn main() -> Result<()> {
     }
 
     let mut explicit_outputs: HashMap<PathBuf, PathBuf> = HashMap::new();
+    let mut errored_paths: Vec<PathBuf> = Vec::new();
     let entries = {
         let mut entries = Vec::new();
 
@@ -82,6 +83,9 @@ fn main() -> Result<()> {
                 Ok(path) => path,
                 Err(e) if e.kind() == ErrorKind::NotFound => {
                     eprintln!("ERROR: File {} not found", path.display());
+                    if !ARGS.output.is_empty() {
+                        errored_paths.push(path.clone());
+                    }
                     continue;
                 }
                 Err(e) => {
@@ -229,8 +233,6 @@ fn main() -> Result<()> {
         None
     };
 
-    let mut errored_paths = Vec::new();
-
     println!(
         "{}{} {}{}",
         "Green".green().dimmed().bold(),
@@ -238,6 +240,22 @@ fn main() -> Result<()> {
         "Red".red(),
         ": path althready exists".dimmed()
     );
+
+    // With --output, an input that cannot be converted is reported and skipped, so that it does
+    // not stop the others; otherwise it stops everything, before any conversion starts.
+    macro_rules! or_skip {
+        ($result:expr, $input:expr) => {
+            match $result {
+                Ok(value) => value,
+                Err(err) if !ARGS.output.is_empty() => {
+                    eprintln!("ERROR: {:#}", color_eyre::Report::from(err));
+                    errored_paths.push($input.to_owned());
+                    continue;
+                }
+                Err(err) => return Err(err.into()),
+            }
+        };
+    }
 
     for (i, input_filepath) in entries.iter().enumerate() {
         let associated_subs = associated_subtitles
@@ -275,15 +293,21 @@ fn main() -> Result<()> {
             tv_options.episode += 1;
         }
 
-        let file = ffmpeg::format::input(&input_filepath)
-            .wrap_err_with(|| format!("Filepath: {}", input_filepath.display()))?;
+        let file = or_skip!(
+            ffmpeg::format::input(&input_filepath)
+                .wrap_err_with(|| format!("Filepath: {}", input_filepath.display())),
+            input_filepath
+        );
 
-        let mut parsed = input::parse_stream_metadata(file, 0)?;
+        let mut parsed = or_skip!(input::parse_stream_metadata(file, 0), input_filepath);
 
         for (i, path) in associated_subs.iter().enumerate() {
-            let file = ffmpeg::format::input(path)
-                .wrap_err_with(|| format!("Filepath: {}", path.display()))?;
-            parsed.extend_from_slice(&input::parse_stream_metadata(file, i + 1)?);
+            let file = or_skip!(
+                ffmpeg::format::input(path).wrap_err_with(|| format!("Filepath: {}", path.display())),
+                input_filepath
+            );
+            let streams = or_skip!(input::parse_stream_metadata(file, i + 1), input_filepath);
+            parsed.extend_from_slice(&streams);
         }
 
         let stream_mappings = input::get_stream_mappings(&parsed);
@@ -293,10 +317,13 @@ fn main() -> Result<()> {
         let codecs = &codec_mappings;
 
         if mappings.video.is_empty() {
-            return Err(eyre!(
-                "No video streams found in '{}'",
-                input_filepath.display()
-            ));
+            or_skip!(
+                Err::<(), _>(eyre!(
+                    "No video streams found in '{}'",
+                    input_filepath.display()
+                )),
+                input_filepath
+            );
         }
 
         print!("Input file '{}' -> ", input_filepath.display());
@@ -383,7 +410,7 @@ fn main() -> Result<()> {
             stream_mappings,
             codec_mappings,
         );
-        let length = input::length(input_filepath)?;
+        let length = or_skip!(input::length(input_filepath), input_filepath);
 
         info!(?command);
         match command {
@@ -399,10 +426,10 @@ fn main() -> Result<()> {
                         output_path.display()
                     ));
                 }
-                errored_paths.push(input_filepath);
+                errored_paths.push(input_filepath.clone());
                 continue;
             }
-            Err(err) => return Err(err.into()),
+            Err(err) => or_skip!(Err::<(), _>(err), input_filepath),
         }
     }
 
@@ -446,20 +473,24 @@ fn main() -> Result<()> {
     }
 
     let rt = Runtime::new()?;
-    if let Err(err) = rt.block_on(r#async::run_commands(commands)) {
-        if err.is::<r#async::Interrupted>() {
-            std::process::exit(130);
-        }
-        return Err(err);
+    let ran = rt.block_on(r#async::run_commands(commands));
+    if let Err(err) = &ran
+        && err.is::<r#async::Interrupted>()
+    {
+        std::process::exit(130);
     }
 
     if !errored_paths.is_empty() {
         eprintln!("Errors occured in {} paths:", errored_paths.len());
-        for p in errored_paths {
+        for p in &errored_paths {
             eprintln!("  {}", p.display());
         }
     }
 
+    ran?;
+    if !errored_paths.is_empty() {
+        return Err(eyre!("{} input(s) were not converted", errored_paths.len()));
+    }
     Ok(())
 }
 
